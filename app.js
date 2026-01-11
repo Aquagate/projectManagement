@@ -6,7 +6,7 @@ const DB_VERSION = 1;
 const ATTACH_STORE = "attachments";
 const HANDLE_STORE = "handles";
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
-const EXPORT_ATTACHMENT_LIMIT = 1024 * 1024;
+const EXPORT_ATTACHMENT_LIMIT = MAX_ATTACHMENT_SIZE;
 
 const state = {
   projects: [],
@@ -16,6 +16,7 @@ const state = {
 const settings = {
   autoSync: false,
   lastSyncPath: null,
+  includeAttachmentsInSync: false,
 };
 
 const entraSettings = {
@@ -38,6 +39,9 @@ const ui = {
   sampleDataBtn: document.getElementById("sampleDataBtn"),
   newProjectBtn: document.getElementById("newProjectBtn"),
   deleteProjectBtn: document.getElementById("deleteProjectBtn"),
+  archiveList: document.getElementById("archiveList"),
+  archiveEmpty: document.getElementById("archiveEmpty"),
+  archiveCount: document.getElementById("archiveCount"),
   detailContent: document.getElementById("detailContent"),
   emptyState: document.getElementById("emptyState"),
   titleInput: document.getElementById("titleInput"),
@@ -65,6 +69,7 @@ const ui = {
   loadSyncBtn: document.getElementById("loadSyncBtn"),
   saveSyncBtn: document.getElementById("saveSyncBtn"),
   autoSyncToggle: document.getElementById("autoSyncToggle"),
+  syncAttachmentsToggle: document.getElementById("syncAttachmentsToggle"),
   syncStatus: document.getElementById("syncStatus"),
   exportMetaBtn: document.getElementById("exportMetaBtn"),
   exportFullBtn: document.getElementById("exportFullBtn"),
@@ -178,7 +183,7 @@ function loadState() {
   if (!raw) return;
   try {
     const parsed = JSON.parse(raw);
-    state.projects = parsed.projects || [];
+    state.projects = (parsed.projects || []).map(normalizeProject);
     state.selectedId = parsed.selectedId || null;
   } catch (error) {
     console.error(error);
@@ -192,6 +197,7 @@ function loadSettings() {
     const parsed = JSON.parse(raw);
     settings.autoSync = Boolean(parsed.autoSync);
     settings.lastSyncPath = parsed.lastSyncPath || null;
+    settings.includeAttachmentsInSync = Boolean(parsed.includeAttachmentsInSync);
   } catch (error) {
     console.error(error);
   }
@@ -237,6 +243,7 @@ function persistSettings() {
     JSON.stringify({
       autoSync: settings.autoSync,
       lastSyncPath: settings.lastSyncPath,
+      includeAttachmentsInSync: settings.includeAttachmentsInSync,
     })
   );
 }
@@ -285,6 +292,8 @@ function createProject() {
     nextActions: [],
     links: [],
     attachments: [],
+    archived: false,
+    archivedAt: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -292,14 +301,34 @@ function createProject() {
   setSelected(newProject.id);
 }
 
-function deleteProject() {
+function normalizeProject(project) {
+  return {
+    archived: false,
+    archivedAt: null,
+    ...project,
+  };
+}
+
+async function deleteProject() {
   const project = getSelectedProject();
   if (!project) return;
-  if (!confirm("このプロジェクトを削除しますか？")) return;
+  if (project.status === "done" && !project.archived) {
+    const archive = confirm(
+      "完了プロジェクトはアーカイブに移動できます。\nOKでアーカイブへ移動、キャンセルで完全削除に進みます。"
+    );
+    if (archive) {
+      updateProject(project, { archived: true, archivedAt: nowIso() });
+      showToast("完了プロジェクトをアーカイブしました。");
+      return;
+    }
+  }
+  if (!confirm("このプロジェクトを完全に削除しますか？\n添付ファイルも削除されます。")) return;
+  await deleteProjectAttachments(project);
   state.projects = state.projects.filter((item) => item.id !== project.id);
-  state.selectedId = state.projects[0]?.id || null;
+  state.selectedId = state.projects.find((item) => !item.archived)?.id || null;
   scheduleSave();
   render();
+  showToast("プロジェクトを削除しました。");
 }
 
 function updateProjectFromForm() {
@@ -309,7 +338,7 @@ function updateProjectFromForm() {
     showToast("タイトルは必須です。");
     return;
   }
-  updateProject(project, {
+  const updates = {
     title: ui.titleInput.value.trim(),
     summary: ui.summaryInput.value.trim(),
     tags: ui.tagsInput.value
@@ -320,7 +349,12 @@ function updateProjectFromForm() {
     priority: ui.priorityInput.value,
     dueDate: ui.dueDateInput.value,
     stuckReason: ui.stuckReasonInput.value.trim(),
-  });
+  };
+  if (project.archived && updates.status !== "done") {
+    updates.archived = false;
+    updates.archivedAt = null;
+  }
+  updateProject(project, updates);
 }
 
 function addNextAction(text) {
@@ -476,6 +510,11 @@ async function removeAttachment(attachmentId) {
   ui.attachmentPreview.innerHTML = "<p>ファイルを選択するとプレビューが表示されます。</p>";
 }
 
+async function deleteProjectAttachments(project) {
+  const storedAttachments = project.attachments.filter((attachment) => attachment.stored);
+  await Promise.all(storedAttachments.map((attachment) => deleteAttachmentBlob(attachment.id)));
+}
+
 async function renderAttachmentPreview(attachment) {
   if (!attachment) return;
   if (!attachment.stored) {
@@ -555,11 +594,19 @@ function sortProjects(projects, sortBy) {
   return sorted;
 }
 
+function getActiveProjects() {
+  return state.projects.filter((project) => !project.archived);
+}
+
+function getArchivedProjects() {
+  return state.projects.filter((project) => project.archived);
+}
+
 function renderProjectList() {
   const query = ui.globalSearch.value.trim();
   const statusFilter = ui.statusFilter.value;
   const sortBy = ui.sortBy.value;
-  const filtered = state.projects.filter((project) => {
+  const filtered = getActiveProjects().filter((project) => {
     if (statusFilter !== "all" && project.status !== statusFilter) return false;
     return matchesSearch(project, query);
   });
@@ -591,6 +638,30 @@ function renderProjectList() {
     card.addEventListener("click", () => setSelected(project.id));
     ui.projectList.appendChild(card);
   });
+  renderArchiveList();
+}
+
+function renderArchiveList() {
+  const query = ui.globalSearch.value.trim();
+  const archived = getArchivedProjects().filter((project) => matchesSearch(project, query));
+  const sorted = sortProjects(archived, "updatedAt");
+  ui.archiveList.innerHTML = "";
+  sorted.forEach((project) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `project-card archived ${project.id === state.selectedId ? "active" : ""}`;
+    card.innerHTML = `
+      <div class="title">${project.title}</div>
+      <div class="meta">
+        <span class="status-pill status-${project.status}">${STATUS_LABELS[project.status]}</span>
+        <span>${project.archivedAt ? `アーカイブ: ${formatDate(project.archivedAt)}` : "アーカイブ済み"}</span>
+      </div>
+    `;
+    card.addEventListener("click", () => setSelected(project.id));
+    ui.archiveList.appendChild(card);
+  });
+  ui.archiveCount.textContent = archived.length ? `(${archived.length})` : "";
+  ui.archiveEmpty.style.display = archived.length ? "none" : "block";
 }
 
 function renderProjectDetail() {
@@ -747,7 +818,7 @@ async function importData(file) {
   const text = await file.text();
   try {
     const payload = JSON.parse(text);
-    state.projects = payload.projects || [];
+    state.projects = (payload.projects || []).map(normalizeProject);
     state.selectedId = payload.selectedId || state.projects[0]?.id || null;
     if (payload.attachmentData) {
       for (const entry of payload.attachmentData) {
@@ -822,7 +893,7 @@ async function saveToSyncFile() {
       showToast("同期ファイルへの権限がありません。");
       return;
     }
-    const payload = await buildExportPayload(false);
+    const payload = await buildExportPayload(settings.includeAttachmentsInSync);
     const writable = await handle.createWritable();
     await writable.write(JSON.stringify(payload, null, 2));
     await writable.close();
@@ -954,7 +1025,7 @@ async function loadFromOneDrive() {
 async function saveToOneDrive() {
   try {
     const path = encodeURIComponent(entraSettings.drivePath);
-    const payload = await buildExportPayload(false);
+    const payload = await buildExportPayload(settings.includeAttachmentsInSync);
     await graphRequest(`https://graph.microsoft.com/v1.0/me/drive/root:/${path}:/content`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -970,7 +1041,7 @@ async function saveToOneDrive() {
 function render() {
   renderProjectList();
   renderProjectDetail();
-  ui.sampleDataBtn.style.display = state.projects.length ? "none" : "inline-flex";
+  ui.sampleDataBtn.style.display = getActiveProjects().length ? "none" : "inline-flex";
 }
 
 function initSampleData() {
@@ -990,6 +1061,8 @@ function initSampleData() {
     ],
     links: [{ id: createId(), label: "ChatGPT", url: "https://chat.openai.com/" }],
     attachments: [],
+    archived: false,
+    archivedAt: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -1052,6 +1125,10 @@ function bindEvents() {
     persistSettings();
     if (settings.autoSync) scheduleSyncSave();
   });
+  ui.syncAttachmentsToggle.addEventListener("change", () => {
+    settings.includeAttachmentsInSync = ui.syncAttachmentsToggle.checked;
+    persistSettings();
+  });
 
   ui.exportMetaBtn.addEventListener("click", () => exportData(false));
   ui.exportFullBtn.addEventListener("click", () => exportData(true));
@@ -1085,6 +1162,7 @@ async function init() {
   loadSettings();
   loadEntraSettings();
   ui.autoSyncToggle.checked = settings.autoSync;
+  ui.syncAttachmentsToggle.checked = settings.includeAttachmentsInSync;
   loadState();
   syncHandle = await loadSyncHandle();
   if (syncHandle) {
