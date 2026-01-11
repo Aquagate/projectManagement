@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.15.0/lib/msal-browser.min.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -171,6 +172,18 @@
                 <span>自動保存</span>
               </label>
               <p id="syncStatus" class="muted">同期ファイル未設定</p>
+            </div>
+            <div class="sync-block">
+              <h3>OneDrive (Entra ID)</h3>
+              <div class="sync-actions">
+                <button id="entraLoginBtn" class="ghost">サインイン</button>
+                <button id="entraLogoutBtn" class="ghost">サインアウト</button>
+              </div>
+              <div class="sync-actions">
+                <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
+                <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
+              </div>
+              <p id="entraStatus" class="muted">未サインイン</p>
             </div>
             <div class="sync-block">
               <h3>Export / Import</h3>

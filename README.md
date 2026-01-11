@@ -20,6 +20,15 @@
 
 **制限事項**: 同期ファイルにはメタ情報のみ保存されます。添付ファイルのBlobはブラウザ内（IndexedDB）に残り、同期ファイルには含まれません。これはファイルサイズを抑え、Live Serverのローカル運用を前提にした判断です。
 
+### OneDrive (Entra ID)
+1. Entra IDでアプリ登録を行い、**Client ID** を控えます。
+2. リダイレクトURIに `http://localhost:5500`（Live Server想定）を追加します。
+3. API権限で `User.Read` と `Files.ReadWrite` を許可します。
+4. アプリ内の「サインイン」を押し、Client IDを入力してログインします。
+5. 「OneDrive読み込み」「OneDrive保存」で `ProjectHub/projects.json` を同期できます。
+
+**制限事項**: OneDrive同期はメタ情報のみ保存します（添付はIndexedDBに残ります）。
+
 ### Export / Import
 - Exportは2種類：
   - **メタのみ**（projects.json）

@@ -1,5 +1,6 @@
 const STORAGE_KEY = "projectHubData";
 const SETTINGS_KEY = "projectHubSettings";
+const ENTRA_SETTINGS_KEY = "projectHubEntraSettings";
 const DB_NAME = "projectHubDB";
 const DB_VERSION = 1;
 const ATTACH_STORE = "attachments";
@@ -17,10 +18,17 @@ const settings = {
   lastSyncPath: null,
 };
 
+const entraSettings = {
+  clientId: "",
+  tenantId: "common",
+  drivePath: "ProjectHub/projects.json",
+};
+
 let syncHandle = null;
 let dbPromise = null;
 let saveDebounce = null;
 let syncDebounce = null;
+let msalInstance = null;
 
 const ui = {
   projectList: document.getElementById("projectList"),
@@ -62,6 +70,11 @@ const ui = {
   exportFullBtn: document.getElementById("exportFullBtn"),
   importInput: document.getElementById("importInput"),
   toast: document.getElementById("toast"),
+  entraLoginBtn: document.getElementById("entraLoginBtn"),
+  entraLogoutBtn: document.getElementById("entraLogoutBtn"),
+  entraLoadBtn: document.getElementById("entraLoadBtn"),
+  entraSaveBtn: document.getElementById("entraSaveBtn"),
+  entraStatus: document.getElementById("entraStatus"),
 };
 
 const STATUS_LABELS = {
@@ -184,12 +197,36 @@ function loadSettings() {
   }
 }
 
+function loadEntraSettings() {
+  const raw = localStorage.getItem(ENTRA_SETTINGS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    entraSettings.clientId = parsed.clientId || "";
+    entraSettings.tenantId = parsed.tenantId || "common";
+    entraSettings.drivePath = parsed.drivePath || "ProjectHub/projects.json";
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 function persistState() {
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
       projects: state.projects,
       selectedId: state.selectedId,
+    })
+  );
+}
+
+function persistEntraSettings() {
+  localStorage.setItem(
+    ENTRA_SETTINGS_KEY,
+    JSON.stringify({
+      clientId: entraSettings.clientId,
+      tenantId: entraSettings.tenantId,
+      drivePath: entraSettings.drivePath,
     })
   );
 }
@@ -796,6 +833,140 @@ async function saveToSyncFile() {
   }
 }
 
+function ensureMsalInstance() {
+  if (!window.msal) {
+    showToast("MSALが読み込まれていません。ネットワーク接続を確認してください。");
+    return null;
+  }
+  if (msalInstance) return msalInstance;
+  msalInstance = new window.msal.PublicClientApplication({
+    auth: {
+      clientId: entraSettings.clientId,
+      authority: `https://login.microsoftonline.com/${entraSettings.tenantId}`,
+      redirectUri: window.location.origin,
+    },
+    cache: { cacheLocation: "localStorage" },
+  });
+  return msalInstance;
+}
+
+function ensureEntraConfig() {
+  if (!entraSettings.clientId) {
+    entraSettings.clientId = prompt("EntraアプリのClient IDを入力してください")?.trim() || "";
+  }
+  if (!entraSettings.tenantId) {
+    entraSettings.tenantId = "common";
+  }
+  if (!entraSettings.drivePath) {
+    entraSettings.drivePath = "ProjectHub/projects.json";
+  }
+  if (!entraSettings.clientId) {
+    showToast("Client IDが設定されていません。");
+    return false;
+  }
+  persistEntraSettings();
+  return true;
+}
+
+async function entraLogin() {
+  if (!ensureEntraConfig()) return;
+  const msalApp = ensureMsalInstance();
+  if (!msalApp) return;
+  try {
+    const result = await msalApp.loginPopup({
+      scopes: ["User.Read", "Files.ReadWrite"],
+    });
+    msalApp.setActiveAccount(result.account);
+    ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
+  } catch (error) {
+    console.error(error);
+    showToast("サインインに失敗しました。");
+  }
+}
+
+async function entraLogout() {
+  if (!msalInstance) return;
+  const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
+  if (!account) return;
+  await msalInstance.logoutPopup({ account });
+  ui.entraStatus.textContent = "未サインイン";
+}
+
+async function getGraphToken() {
+  if (!ensureEntraConfig()) return null;
+  const msalApp = ensureMsalInstance();
+  if (!msalApp) return null;
+  const account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
+  if (!account) {
+    await entraLogin();
+  }
+  const activeAccount = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
+  if (!activeAccount) return null;
+  msalApp.setActiveAccount(activeAccount);
+  try {
+    const response = await msalApp.acquireTokenSilent({
+      account: activeAccount,
+      scopes: ["User.Read", "Files.ReadWrite"],
+    });
+    return response.accessToken;
+  } catch (error) {
+    console.error(error);
+    const response = await msalApp.acquireTokenPopup({
+      account: activeAccount,
+      scopes: ["User.Read", "Files.ReadWrite"],
+    });
+    return response.accessToken;
+  }
+}
+
+async function graphRequest(url, options = {}) {
+  const token = await getGraphToken();
+  if (!token) return null;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Graph API error: ${response.status}`);
+  }
+  return response;
+}
+
+async function loadFromOneDrive() {
+  try {
+    const path = encodeURIComponent(entraSettings.drivePath);
+    const response = await graphRequest(
+      `https://graph.microsoft.com/v1.0/me/drive/root:/${path}:/content`
+    );
+    if (!response) return;
+    const blob = await response.blob();
+    await importData(blob);
+    ui.entraStatus.textContent = "OneDriveから読み込みました。";
+  } catch (error) {
+    console.error(error);
+    showToast("OneDrive読み込みに失敗しました。");
+  }
+}
+
+async function saveToOneDrive() {
+  try {
+    const path = encodeURIComponent(entraSettings.drivePath);
+    const payload = await buildExportPayload(false);
+    await graphRequest(`https://graph.microsoft.com/v1.0/me/drive/root:/${path}:/content`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload, null, 2),
+    });
+    ui.entraStatus.textContent = "OneDriveへ保存しました。";
+  } catch (error) {
+    console.error(error);
+    showToast("OneDrive保存に失敗しました。");
+  }
+}
+
 function render() {
   renderProjectList();
   renderProjectDetail();
@@ -890,6 +1061,11 @@ function bindEvents() {
     ui.importInput.value = "";
   });
 
+  ui.entraLoginBtn.addEventListener("click", entraLogin);
+  ui.entraLogoutBtn.addEventListener("click", entraLogout);
+  ui.entraLoadBtn.addEventListener("click", loadFromOneDrive);
+  ui.entraSaveBtn.addEventListener("click", saveToOneDrive);
+
   document.addEventListener("keydown", (event) => {
     const isMac = navigator.platform.toUpperCase().includes("MAC");
     const modifier = isMac ? event.metaKey : event.ctrlKey;
@@ -907,6 +1083,7 @@ function bindEvents() {
 
 async function init() {
   loadSettings();
+  loadEntraSettings();
   ui.autoSyncToggle.checked = settings.autoSync;
   loadState();
   syncHandle = await loadSyncHandle();
