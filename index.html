@@ -49,6 +49,14 @@
         </div>
       </div>
       <div id="projectList" class="project-list"></div>
+      <div class="archive-section">
+        <div class="archive-header">
+          <h3>完了アーカイブ</h3>
+          <span id="archiveCount" class="muted"></span>
+        </div>
+        <div id="archiveList" class="project-list archive-list"></div>
+        <p id="archiveEmpty" class="muted archive-empty">アーカイブはまだありません。</p>
+      </div>
       <div class="sidebar-footer">
         <button id="sampleDataBtn" class="ghost">サンプルデータ投入</button>
       </div>
@@ -171,7 +179,12 @@
                 <input id="autoSyncToggle" type="checkbox" />
                 <span>自動保存</span>
               </label>
+              <label class="switch">
+                <input id="syncAttachmentsToggle" type="checkbox" />
+                <span>添付も同期</span>
+              </label>
               <p id="syncStatus" class="muted">同期ファイル未設定</p>
+              <p class="muted">添付の同期はファイルサイズが大きい場合に時間がかかります。</p>
             </div>
             <div class="sync-block">
               <h3>OneDrive (Entra ID)</h3>

@@ -138,6 +138,27 @@ button.ghost,
   padding-right: 6px;
 }
 
+.archive-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.archive-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.archive-list {
+  max-height: 220px;
+}
+
+.archive-empty {
+  margin-top: 8px;
+}
+
 .project-card {
   padding: 12px;
   border: 1px solid var(--border);
@@ -151,6 +172,10 @@ button.ghost,
 .project-card.active {
   border-color: var(--primary);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.project-card.archived {
+  background: #f8fafc;
 }
 
 .project-card .title {
