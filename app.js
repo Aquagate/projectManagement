@@ -78,6 +78,7 @@ const ui = {
   toast: document.getElementById("toast"),
   entraLoginBtn: document.getElementById("entraLoginBtn"),
   entraLogoutBtn: document.getElementById("entraLogoutBtn"),
+  entraConfigBtn: document.getElementById("entraConfigBtn"),
   entraLoadBtn: document.getElementById("entraLoadBtn"),
   entraSaveBtn: document.getElementById("entraSaveBtn"),
   entraStatus: document.getElementById("entraStatus"),
@@ -927,26 +928,55 @@ async function ensureMsalInstance() {
   return msalInstance;
 }
 
-function ensureEntraConfig() {
-  if (!entraSettings.clientId) {
-    entraSettings.clientId = prompt("EntraアプリのClient IDを入力してください")?.trim() || "";
+function resetMsalInstance() {
+  msalInstance = null;
+  msalInitPromise = null;
+}
+
+function promptEntraSettings(force = false) {
+  const previousSettings = {
+    clientId: entraSettings.clientId,
+    tenantId: entraSettings.tenantId,
+    drivePath: entraSettings.drivePath,
+  };
+  if (force || !entraSettings.clientId) {
+    entraSettings.clientId =
+      prompt("EntraアプリのClient IDを入力してください", entraSettings.clientId || "")?.trim() || "";
   }
-  if (!entraSettings.tenantId) {
-    entraSettings.tenantId = "common";
+  if (force || !entraSettings.tenantId) {
+    entraSettings.tenantId =
+      prompt("テナントID (既定: common) を入力してください", entraSettings.tenantId || "common")?.trim() ||
+      "common";
   }
-  if (!entraSettings.drivePath) {
-    entraSettings.drivePath = "ProjectHub/projects.json";
+  if (force || !entraSettings.drivePath) {
+    entraSettings.drivePath =
+      prompt(
+        "OneDrive保存先パスを入力してください",
+        entraSettings.drivePath || "ProjectHub/projects.json"
+      )?.trim() || "ProjectHub/projects.json";
   }
   if (!entraSettings.clientId) {
     showToast("Client IDが設定されていません。");
     return false;
   }
   persistEntraSettings();
+  const updated =
+    previousSettings.clientId !== entraSettings.clientId ||
+    previousSettings.tenantId !== entraSettings.tenantId;
+  if (updated) {
+    resetMsalInstance();
+  }
   return true;
 }
 
+function configureEntraSettings() {
+  if (promptEntraSettings(true)) {
+    ui.entraStatus.textContent = "設定を更新しました。";
+  }
+}
+
 async function entraLogin() {
-  if (!ensureEntraConfig()) return;
+  if (!promptEntraSettings()) return;
   const msalApp = await ensureMsalInstance();
   if (!msalApp) return;
   try {
@@ -957,7 +987,12 @@ async function entraLogin() {
     ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
   } catch (error) {
     console.error(error);
-    showToast("サインインに失敗しました。");
+    if (String(error?.message || "").includes("redirect_uri")) {
+      ui.entraStatus.textContent = "サインインに失敗しました。設定を確認してください。";
+      showToast("リダイレクトURIが一致しません。設定を再入力してください。");
+    } else {
+      showToast("サインインに失敗しました。");
+    }
   }
 }
 
@@ -970,7 +1005,7 @@ async function entraLogout() {
 }
 
 async function getGraphToken() {
-  if (!ensureEntraConfig()) return null;
+  if (!promptEntraSettings()) return null;
   const msalApp = await ensureMsalInstance();
   if (!msalApp) return null;
   const account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
@@ -1146,6 +1181,7 @@ function bindEvents() {
 
   ui.entraLoginBtn.addEventListener("click", entraLogin);
   ui.entraLogoutBtn.addEventListener("click", entraLogout);
+  ui.entraConfigBtn.addEventListener("click", configureEntraSettings);
   ui.entraLoadBtn.addEventListener("click", loadFromOneDrive);
   ui.entraSaveBtn.addEventListener("click", saveToOneDrive);
 
