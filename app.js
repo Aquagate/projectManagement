@@ -23,6 +23,7 @@ const entraSettings = {
   clientId: "",
   tenantId: "common",
   drivePath: "ProjectHub/projects.json",
+  redirectUri: "",
 };
 
 let syncHandle = null;
@@ -76,8 +77,16 @@ const ui = {
   exportFullBtn: document.getElementById("exportFullBtn"),
   importInput: document.getElementById("importInput"),
   toast: document.getElementById("toast"),
+  syncSettingsBtn: document.getElementById("syncSettingsBtn"),
   entraLoginBtn: document.getElementById("entraLoginBtn"),
   entraLogoutBtn: document.getElementById("entraLogoutBtn"),
+  entraConfigBtn: document.getElementById("entraConfigBtn"),
+  entraClientIdInput: document.getElementById("entraClientIdInput"),
+  entraTenantIdInput: document.getElementById("entraTenantIdInput"),
+  entraDrivePathInput: document.getElementById("entraDrivePathInput"),
+  entraRedirectUriInput: document.getElementById("entraRedirectUriInput"),
+  entraRedirectUriHint: document.getElementById("entraRedirectUriHint"),
+  entraRedirectUriSetBtn: document.getElementById("entraRedirectUriSetBtn"),
   entraLoadBtn: document.getElementById("entraLoadBtn"),
   entraSaveBtn: document.getElementById("entraSaveBtn"),
   entraStatus: document.getElementById("entraStatus"),
@@ -212,6 +221,7 @@ function loadEntraSettings() {
     entraSettings.clientId = parsed.clientId || "";
     entraSettings.tenantId = parsed.tenantId || "common";
     entraSettings.drivePath = parsed.drivePath || "ProjectHub/projects.json";
+    entraSettings.redirectUri = parsed.redirectUri || "";
   } catch (error) {
     console.error(error);
   }
@@ -234,6 +244,7 @@ function persistEntraSettings() {
       clientId: entraSettings.clientId,
       tenantId: entraSettings.tenantId,
       drivePath: entraSettings.drivePath,
+      redirectUri: entraSettings.redirectUri,
     })
   );
 }
@@ -915,7 +926,7 @@ async function ensureMsalInstance() {
       auth: {
         clientId: entraSettings.clientId,
         authority: `https://login.microsoftonline.com/${entraSettings.tenantId}`,
-        redirectUri: window.location.origin,
+        redirectUri: entraSettings.redirectUri || window.location.origin,
       },
       cache: { cacheLocation: "localStorage" },
     });
@@ -927,22 +938,66 @@ async function ensureMsalInstance() {
   return msalInstance;
 }
 
+function resetMsalInstance() {
+  msalInstance = null;
+  msalInitPromise = null;
+}
+
+function renderEntraSettings() {
+  ui.entraClientIdInput.value = entraSettings.clientId;
+  ui.entraTenantIdInput.value = entraSettings.tenantId || "common";
+  ui.entraDrivePathInput.value = entraSettings.drivePath || "ProjectHub/projects.json";
+  ui.entraRedirectUriInput.value = entraSettings.redirectUri || window.location.origin;
+  if (ui.entraRedirectUriHint) {
+    ui.entraRedirectUriHint.textContent = window.location.origin;
+  }
+}
+
 function ensureEntraConfig() {
-  if (!entraSettings.clientId) {
-    entraSettings.clientId = prompt("EntraアプリのClient IDを入力してください")?.trim() || "";
-  }
-  if (!entraSettings.tenantId) {
-    entraSettings.tenantId = "common";
-  }
-  if (!entraSettings.drivePath) {
-    entraSettings.drivePath = "ProjectHub/projects.json";
-  }
-  if (!entraSettings.clientId) {
+  const nextClientId = ui.entraClientIdInput.value.trim();
+  const nextTenantId = ui.entraTenantIdInput.value.trim() || "common";
+  const nextDrivePath = ui.entraDrivePathInput.value.trim() || "ProjectHub/projects.json";
+  const nextRedirectUri = ui.entraRedirectUriInput.value.trim() || window.location.origin;
+  if (!nextClientId) {
     showToast("Client IDが設定されていません。");
     return false;
   }
+  try {
+    new URL(nextRedirectUri);
+  } catch (error) {
+    console.error(error);
+    showToast("Redirect URIが正しい形式ではありません。");
+    return false;
+  }
+  const previousSettings = {
+    clientId: entraSettings.clientId,
+    tenantId: entraSettings.tenantId,
+    redirectUri: entraSettings.redirectUri,
+  };
+  entraSettings.clientId = nextClientId;
+  entraSettings.tenantId = nextTenantId;
+  entraSettings.drivePath = nextDrivePath;
+  entraSettings.redirectUri = nextRedirectUri;
   persistEntraSettings();
+  const updated =
+    previousSettings.clientId !== entraSettings.clientId ||
+    previousSettings.tenantId !== entraSettings.tenantId ||
+    previousSettings.redirectUri !== entraSettings.redirectUri;
+  if (updated) {
+    resetMsalInstance();
+  }
+  renderEntraSettings();
   return true;
+}
+
+function promptEntraSettings() {
+  return ensureEntraConfig();
+}
+
+function configureEntraSettings() {
+  if (ensureEntraConfig()) {
+    ui.entraStatus.textContent = "設定を更新しました。";
+  }
 }
 
 async function entraLogin() {
@@ -957,7 +1012,12 @@ async function entraLogin() {
     ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
   } catch (error) {
     console.error(error);
-    showToast("サインインに失敗しました。");
+    if (String(error?.message || "").includes("redirect_uri")) {
+      ui.entraStatus.textContent = "サインインに失敗しました。設定を確認してください。";
+      showToast("リダイレクトURIが一致しません。設定を再入力してください。");
+    } else {
+      showToast("サインインに失敗しました。");
+    }
   }
 }
 
@@ -1144,8 +1204,16 @@ function bindEvents() {
     ui.importInput.value = "";
   });
 
+  ui.syncSettingsBtn.addEventListener("click", () => {
+    document.getElementById("syncSection")?.scrollIntoView({ behavior: "smooth" });
+  });
   ui.entraLoginBtn.addEventListener("click", entraLogin);
   ui.entraLogoutBtn.addEventListener("click", entraLogout);
+  ui.entraConfigBtn.addEventListener("click", configureEntraSettings);
+  ui.entraRedirectUriSetBtn.addEventListener("click", () => {
+    ui.entraRedirectUriInput.value = window.location.origin;
+    configureEntraSettings();
+  });
   ui.entraLoadBtn.addEventListener("click", loadFromOneDrive);
   ui.entraSaveBtn.addEventListener("click", saveToOneDrive);
 
@@ -1167,6 +1235,7 @@ function bindEvents() {
 async function init() {
   loadSettings();
   loadEntraSettings();
+  renderEntraSettings();
   ui.autoSyncToggle.checked = settings.autoSync;
   ui.syncAttachmentsToggle.checked = settings.includeAttachmentsInSync;
   loadState();
