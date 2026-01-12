@@ -30,6 +30,7 @@ let dbPromise = null;
 let saveDebounce = null;
 let syncDebounce = null;
 let msalInstance = null;
+let msalInitPromise = null;
 
 const ui = {
   projectList: document.getElementById("projectList"),
@@ -904,20 +905,32 @@ async function saveToSyncFile() {
   }
 }
 
-function ensureMsalInstance() {
+async function ensureMsalInstance() {
   if (!window.msal) {
     showToast("MSALが読み込まれていません。ネットワーク接続を確認してください。");
     return null;
   }
-  if (msalInstance) return msalInstance;
-  msalInstance = new window.msal.PublicClientApplication({
-    auth: {
-      clientId: entraSettings.clientId,
-      authority: `https://login.microsoftonline.com/${entraSettings.tenantId}`,
-      redirectUri: window.location.origin,
-    },
-    cache: { cacheLocation: "localStorage" },
-  });
+  if (!msalInstance) {
+    msalInstance = new window.msal.PublicClientApplication({
+      auth: {
+        clientId: entraSettings.clientId,
+        authority: `https://login.microsoftonline.com/${entraSettings.tenantId}`,
+        redirectUri: window.location.origin,
+      },
+      cache: { cacheLocation: "localStorage" },
+    });
+  }
+  if (!msalInitPromise) {
+    msalInitPromise = (async () => {
+      await msalInstance.initialize();
+      await msalInstance.handleRedirectPromise();
+    })();
+    msalInitPromise.catch((error) => {
+      console.error(error);
+      msalInitPromise = null;
+    });
+  }
+  await msalInitPromise;
   return msalInstance;
 }
 
@@ -941,7 +954,7 @@ function ensureEntraConfig() {
 
 async function entraLogin() {
   if (!ensureEntraConfig()) return;
-  const msalApp = ensureMsalInstance();
+  const msalApp = await ensureMsalInstance();
   if (!msalApp) return;
   try {
     const result = await msalApp.loginPopup({
@@ -965,7 +978,7 @@ async function entraLogout() {
 
 async function getGraphToken() {
   if (!ensureEntraConfig()) return null;
-  const msalApp = ensureMsalInstance();
+  const msalApp = await ensureMsalInstance();
   if (!msalApp) return null;
   const account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
   if (!account) {
