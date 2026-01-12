@@ -23,6 +23,7 @@ const entraSettings = {
   clientId: "",
   tenantId: "common",
   drivePath: "ProjectHub/projects.json",
+  redirectUri: "",
 };
 
 let syncHandle = null;
@@ -83,6 +84,7 @@ const ui = {
   entraClientIdInput: document.getElementById("entraClientIdInput"),
   entraTenantIdInput: document.getElementById("entraTenantIdInput"),
   entraDrivePathInput: document.getElementById("entraDrivePathInput"),
+  entraRedirectUriInput: document.getElementById("entraRedirectUriInput"),
   entraLoadBtn: document.getElementById("entraLoadBtn"),
   entraSaveBtn: document.getElementById("entraSaveBtn"),
   entraStatus: document.getElementById("entraStatus"),
@@ -217,6 +219,7 @@ function loadEntraSettings() {
     entraSettings.clientId = parsed.clientId || "";
     entraSettings.tenantId = parsed.tenantId || "common";
     entraSettings.drivePath = parsed.drivePath || "ProjectHub/projects.json";
+    entraSettings.redirectUri = parsed.redirectUri || "";
   } catch (error) {
     console.error(error);
   }
@@ -239,6 +242,7 @@ function persistEntraSettings() {
       clientId: entraSettings.clientId,
       tenantId: entraSettings.tenantId,
       drivePath: entraSettings.drivePath,
+      redirectUri: entraSettings.redirectUri,
     })
   );
 }
@@ -920,7 +924,7 @@ async function ensureMsalInstance() {
       auth: {
         clientId: entraSettings.clientId,
         authority: `https://login.microsoftonline.com/${entraSettings.tenantId}`,
-        redirectUri: window.location.origin,
+        redirectUri: entraSettings.redirectUri || window.location.origin,
       },
       cache: { cacheLocation: "localStorage" },
     });
@@ -941,12 +945,14 @@ function renderEntraSettings() {
   ui.entraClientIdInput.value = entraSettings.clientId;
   ui.entraTenantIdInput.value = entraSettings.tenantId || "common";
   ui.entraDrivePathInput.value = entraSettings.drivePath || "ProjectHub/projects.json";
+  ui.entraRedirectUriInput.value = entraSettings.redirectUri || window.location.origin;
 }
 
 function ensureEntraConfig() {
   const nextClientId = ui.entraClientIdInput.value.trim();
   const nextTenantId = ui.entraTenantIdInput.value.trim() || "common";
   const nextDrivePath = ui.entraDrivePathInput.value.trim() || "ProjectHub/projects.json";
+  const nextRedirectUri = ui.entraRedirectUriInput.value.trim() || window.location.origin;
   if (!nextClientId) {
     showToast("Client IDが設定されていません。");
     return false;
@@ -954,14 +960,17 @@ function ensureEntraConfig() {
   const previousSettings = {
     clientId: entraSettings.clientId,
     tenantId: entraSettings.tenantId,
+    redirectUri: entraSettings.redirectUri,
   };
   entraSettings.clientId = nextClientId;
   entraSettings.tenantId = nextTenantId;
   entraSettings.drivePath = nextDrivePath;
+  entraSettings.redirectUri = nextRedirectUri;
   persistEntraSettings();
   const updated =
     previousSettings.clientId !== entraSettings.clientId ||
-    previousSettings.tenantId !== entraSettings.tenantId;
+    previousSettings.tenantId !== entraSettings.tenantId ||
+    previousSettings.redirectUri !== entraSettings.redirectUri;
   if (updated) {
     resetMsalInstance();
   }
