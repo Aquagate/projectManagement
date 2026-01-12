@@ -1067,7 +1067,16 @@ async function graphRequest(url, options = {}) {
     },
   });
   if (!response.ok) {
-    throw new Error(`Graph API error: ${response.status}`);
+    let detail = "";
+    try {
+      detail = await response.text();
+    } catch (error) {
+      console.error(error);
+    }
+    const message = `Graph API error: ${response.status} ${response.statusText}`.trim();
+    const errorWithStatus = new Error(detail ? `${message} - ${detail}` : message);
+    errorWithStatus.status = response.status;
+    throw errorWithStatus;
   }
   return response;
 }
@@ -1084,7 +1093,16 @@ async function loadFromOneDrive() {
     ui.entraStatus.textContent = "OneDriveから読み込みました。";
   } catch (error) {
     console.error(error);
-    showToast("OneDrive読み込みに失敗しました。");
+    if (error?.status === 404) {
+      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。保存先パスを確認してください。";
+      showToast("指定した保存先パスが見つかりません。");
+    } else if (error?.status === 401 || error?.status === 403) {
+      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。権限を確認してください。";
+      showToast("サインイン権限を確認してください。");
+    } else {
+      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。";
+      showToast("OneDrive読み込みに失敗しました。");
+    }
   }
 }
 
@@ -1100,7 +1118,13 @@ async function saveToOneDrive() {
     ui.entraStatus.textContent = "OneDriveへ保存しました。";
   } catch (error) {
     console.error(error);
-    showToast("OneDrive保存に失敗しました。");
+    if (error?.status === 401 || error?.status === 403) {
+      ui.entraStatus.textContent = "OneDrive保存に失敗しました。権限を確認してください。";
+      showToast("サインイン権限を確認してください。");
+    } else {
+      ui.entraStatus.textContent = "OneDrive保存に失敗しました。";
+      showToast("OneDrive保存に失敗しました。");
+    }
   }
 }
 
@@ -1186,7 +1210,13 @@ function bindEvents() {
   ui.pickSyncFileBtn.addEventListener("click", pickSyncFile);
   ui.loadSyncBtn.addEventListener("click", loadFromSyncFile);
   ui.saveSyncBtn.addEventListener("click", saveToSyncFile);
-  ui.autoSyncToggle.addEventListener("change", () => {
+  ui.autoSyncToggle.addEventListener("change", async () => {
+    if (ui.autoSyncToggle.checked && !syncHandle) {
+      showToast("先に同期ファイルを選択してください。");
+      await pickSyncFile();
+      ui.autoSyncToggle.checked = Boolean(syncHandle);
+      if (!syncHandle) return;
+    }
     settings.autoSync = ui.autoSyncToggle.checked;
     persistSettings();
     if (settings.autoSync) scheduleSyncSave();
