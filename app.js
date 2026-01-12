@@ -921,7 +921,14 @@ async function ensureMsalInstance() {
     });
   }
   if (!msalInitPromise) {
-    msalInitPromise = msalInstance.initialize();
+    msalInitPromise = (async () => {
+      await msalInstance.initialize();
+      await msalInstance.handleRedirectPromise();
+    })();
+    msalInitPromise.catch((error) => {
+      console.error(error);
+      msalInitPromise = null;
+    });
   }
   await msalInitPromise;
   return msalInstance;
