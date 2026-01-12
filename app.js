@@ -76,9 +76,13 @@ const ui = {
   exportFullBtn: document.getElementById("exportFullBtn"),
   importInput: document.getElementById("importInput"),
   toast: document.getElementById("toast"),
+  syncSettingsBtn: document.getElementById("syncSettingsBtn"),
   entraLoginBtn: document.getElementById("entraLoginBtn"),
   entraLogoutBtn: document.getElementById("entraLogoutBtn"),
   entraConfigBtn: document.getElementById("entraConfigBtn"),
+  entraClientIdInput: document.getElementById("entraClientIdInput"),
+  entraTenantIdInput: document.getElementById("entraTenantIdInput"),
+  entraDrivePathInput: document.getElementById("entraDrivePathInput"),
   entraLoadBtn: document.getElementById("entraLoadBtn"),
   entraSaveBtn: document.getElementById("entraSaveBtn"),
   entraStatus: document.getElementById("entraStatus"),
@@ -933,32 +937,27 @@ function resetMsalInstance() {
   msalInitPromise = null;
 }
 
-function promptEntraSettings(force = false) {
-  const previousSettings = {
-    clientId: entraSettings.clientId,
-    tenantId: entraSettings.tenantId,
-    drivePath: entraSettings.drivePath,
-  };
-  if (force || !entraSettings.clientId) {
-    entraSettings.clientId =
-      prompt("EntraアプリのClient IDを入力してください", entraSettings.clientId || "")?.trim() || "";
-  }
-  if (force || !entraSettings.tenantId) {
-    entraSettings.tenantId =
-      prompt("テナントID (既定: common) を入力してください", entraSettings.tenantId || "common")?.trim() ||
-      "common";
-  }
-  if (force || !entraSettings.drivePath) {
-    entraSettings.drivePath =
-      prompt(
-        "OneDrive保存先パスを入力してください",
-        entraSettings.drivePath || "ProjectHub/projects.json"
-      )?.trim() || "ProjectHub/projects.json";
-  }
-  if (!entraSettings.clientId) {
+function renderEntraSettings() {
+  ui.entraClientIdInput.value = entraSettings.clientId;
+  ui.entraTenantIdInput.value = entraSettings.tenantId || "common";
+  ui.entraDrivePathInput.value = entraSettings.drivePath || "ProjectHub/projects.json";
+}
+
+function ensureEntraConfig() {
+  const nextClientId = ui.entraClientIdInput.value.trim();
+  const nextTenantId = ui.entraTenantIdInput.value.trim() || "common";
+  const nextDrivePath = ui.entraDrivePathInput.value.trim() || "ProjectHub/projects.json";
+  if (!nextClientId) {
     showToast("Client IDが設定されていません。");
     return false;
   }
+  const previousSettings = {
+    clientId: entraSettings.clientId,
+    tenantId: entraSettings.tenantId,
+  };
+  entraSettings.clientId = nextClientId;
+  entraSettings.tenantId = nextTenantId;
+  entraSettings.drivePath = nextDrivePath;
   persistEntraSettings();
   const updated =
     previousSettings.clientId !== entraSettings.clientId ||
@@ -966,11 +965,12 @@ function promptEntraSettings(force = false) {
   if (updated) {
     resetMsalInstance();
   }
+  renderEntraSettings();
   return true;
 }
 
 function configureEntraSettings() {
-  if (promptEntraSettings(true)) {
+  if (ensureEntraConfig()) {
     ui.entraStatus.textContent = "設定を更新しました。";
   }
 }
@@ -1179,6 +1179,9 @@ function bindEvents() {
     ui.importInput.value = "";
   });
 
+  ui.syncSettingsBtn.addEventListener("click", () => {
+    document.getElementById("syncSection")?.scrollIntoView({ behavior: "smooth" });
+  });
   ui.entraLoginBtn.addEventListener("click", entraLogin);
   ui.entraLogoutBtn.addEventListener("click", entraLogout);
   ui.entraConfigBtn.addEventListener("click", configureEntraSettings);
@@ -1203,6 +1206,7 @@ function bindEvents() {
 async function init() {
   loadSettings();
   loadEntraSettings();
+  renderEntraSettings();
   ui.autoSyncToggle.checked = settings.autoSync;
   ui.syncAttachmentsToggle.checked = settings.includeAttachmentsInSync;
   loadState();
