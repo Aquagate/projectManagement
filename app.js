@@ -978,6 +978,10 @@ function ensureEntraConfig() {
   return true;
 }
 
+function promptEntraSettings() {
+  return ensureEntraConfig();
+}
+
 function configureEntraSettings() {
   if (ensureEntraConfig()) {
     ui.entraStatus.textContent = "設定を更新しました。";
