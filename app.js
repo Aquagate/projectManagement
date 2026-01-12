@@ -85,6 +85,8 @@ const ui = {
   entraTenantIdInput: document.getElementById("entraTenantIdInput"),
   entraDrivePathInput: document.getElementById("entraDrivePathInput"),
   entraRedirectUriInput: document.getElementById("entraRedirectUriInput"),
+  entraRedirectUriHint: document.getElementById("entraRedirectUriHint"),
+  entraRedirectUriSetBtn: document.getElementById("entraRedirectUriSetBtn"),
   entraLoadBtn: document.getElementById("entraLoadBtn"),
   entraSaveBtn: document.getElementById("entraSaveBtn"),
   entraStatus: document.getElementById("entraStatus"),
@@ -946,6 +948,9 @@ function renderEntraSettings() {
   ui.entraTenantIdInput.value = entraSettings.tenantId || "common";
   ui.entraDrivePathInput.value = entraSettings.drivePath || "ProjectHub/projects.json";
   ui.entraRedirectUriInput.value = entraSettings.redirectUri || window.location.origin;
+  if (ui.entraRedirectUriHint) {
+    ui.entraRedirectUriHint.textContent = window.location.origin;
+  }
 }
 
 function ensureEntraConfig() {
@@ -955,6 +960,13 @@ function ensureEntraConfig() {
   const nextRedirectUri = ui.entraRedirectUriInput.value.trim() || window.location.origin;
   if (!nextClientId) {
     showToast("Client IDが設定されていません。");
+    return false;
+  }
+  try {
+    new URL(nextRedirectUri);
+  } catch (error) {
+    console.error(error);
+    showToast("Redirect URIが正しい形式ではありません。");
     return false;
   }
   const previousSettings = {
@@ -1198,6 +1210,10 @@ function bindEvents() {
   ui.entraLoginBtn.addEventListener("click", entraLogin);
   ui.entraLogoutBtn.addEventListener("click", entraLogout);
   ui.entraConfigBtn.addEventListener("click", configureEntraSettings);
+  ui.entraRedirectUriSetBtn.addEventListener("click", () => {
+    ui.entraRedirectUriInput.value = window.location.origin;
+    configureEntraSettings();
+  });
   ui.entraLoadBtn.addEventListener("click", loadFromOneDrive);
   ui.entraSaveBtn.addEventListener("click", saveToOneDrive);
 
