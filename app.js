@@ -976,7 +976,7 @@ function configureEntraSettings() {
 }
 
 async function entraLogin() {
-  if (!ensureEntraConfig()) return;
+  if (!promptEntraSettings()) return;
   const msalApp = await ensureMsalInstance();
   if (!msalApp) return;
   try {
@@ -1005,7 +1005,7 @@ async function entraLogout() {
 }
 
 async function getGraphToken() {
-  if (!ensureEntraConfig()) return null;
+  if (!promptEntraSettings()) return null;
   const msalApp = await ensureMsalInstance();
   if (!msalApp) return null;
   const account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
