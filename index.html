@@ -163,7 +163,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" id="syncSection">
           <div class="card-header">
             <h2>同期 & エクスポート/インポート</h2>
           </div>
@@ -184,18 +184,49 @@
                 <span>添付も同期</span>
               </label>
               <p id="syncStatus" class="muted">同期ファイル未設定</p>
+              <p class="muted">自動保存を使うには最初に同期ファイルを選択してください。</p>
               <p class="muted">添付の同期はファイルサイズが大きい場合に時間がかかります。</p>
             </div>
             <div class="sync-block">
               <h3>OneDrive (Entra ID)</h3>
+              <div class="form-grid">
+                <label>
+                  Client ID
+                  <input id="entraClientIdInput" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                </label>
+                <label>
+                  テナントID
+                  <input id="entraTenantIdInput" type="text" placeholder="common またはテナントID" />
+                </label>
+                <label>
+                  保存先パス
+                  <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
+                </label>
+                <label class="switch">
+                  <input id="entraAppFolderToggle" type="checkbox" />
+                  <span>AppFolder (/Apps) を使用</span>
+                </label>
+                <label>
+                  Redirect URI
+                  <input id="entraRedirectUriInput" type="url" placeholder="https://example.com" />
+                </label>
+                <p class="muted">
+                  現在のURL: <span id="entraRedirectUriHint"></span>
+                  <button id="entraRedirectUriSetBtn" class="ghost" type="button">現在のURLをセット</button>
+                </p>
+              </div>
               <div class="sync-actions">
                 <button id="entraLoginBtn" class="ghost">サインイン</button>
                 <button id="entraLogoutBtn" class="ghost">サインアウト</button>
+                <button id="entraConfigBtn" class="ghost">設定を保存</button>
               </div>
               <div class="sync-actions">
                 <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
                 <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
               </div>
+              <p class="muted">
+                AppFolderを使う場合は、保存先パスはAppFolder内の相対パスだけ入力してください。
+              </p>
               <p id="entraStatus" class="muted">未サインイン</p>
             </div>
             <div class="sync-block">
