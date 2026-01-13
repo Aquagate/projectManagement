@@ -202,6 +202,10 @@
                   保存先パス
                   <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
                 </label>
+                <label class="switch">
+                  <input id="entraAppFolderToggle" type="checkbox" />
+                  <span>AppFolder (/Apps) を使用</span>
+                </label>
                 <label>
                   Redirect URI
                   <input id="entraRedirectUriInput" type="url" placeholder="https://example.com" />
@@ -220,6 +224,9 @@
                 <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
                 <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
               </div>
+              <p class="muted">
+                AppFolderを使う場合は、保存先パスはAppFolder内の相対パスだけ入力してください。
+              </p>
               <p id="entraStatus" class="muted">未サインイン</p>
             </div>
             <div class="sync-block">
