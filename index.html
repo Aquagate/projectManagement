@@ -194,30 +194,11 @@
 
         <section class="card" id="syncSection">
           <div class="card-header">
-            <h2>同期 & エクスポート/インポート</h2>
+            <h2>同期 & エクスポート</h2>
           </div>
           <div class="sync-panel">
             <div class="sync-block">
-              <h3>File System Access API (PC専用)</h3>
-              <div class="sync-actions">
-                <button id="pickSyncFileBtn" class="ghost">同期ファイルを選択</button>
-                <button id="loadSyncBtn" class="ghost">読み込み</button>
-                <button id="saveSyncBtn" class="ghost">保存</button>
-              </div>
-              <label class="switch">
-                <input id="autoSyncToggle" type="checkbox" />
-                <span>自動保存</span>
-              </label>
-              <label class="switch">
-                <input id="syncAttachmentsToggle" type="checkbox" />
-                <span>添付も同期</span>
-              </label>
-              <p id="syncStatus" class="muted">同期ファイル未設定</p>
-              <p class="muted">自動保存を使うには最初に同期ファイルを選択してください。</p>
-              <p class="muted">添付の同期はファイルサイズが大きい場合に時間がかかります。</p>
-            </div>
-            <div class="sync-block">
-              <h3>OneDrive (Entra ID)</h3>
+              <h3>OneDrive (Entra ID) 一本化</h3>
               <div class="form-grid">
                 <label>
                   Client ID
@@ -231,52 +212,85 @@
                   保存先パス
                   <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
                 </label>
-                <label class="switch">
-                  <input id="entraAppFolderToggle" type="checkbox" />
-                  <span>AppFolder (/Apps) を使用</span>
-                </label>
-                <label class="switch">
-                  <input id="entraAutoSyncToggle" type="checkbox" />
-                  <span>OneDrive自動保存</span>
-                </label>
-                <label>
+                <div class="switch-group" style="display: flex; gap: 16px; align-items: center;">
+                  <label class="switch">
+                    <input id="entraAppFolderToggle" type="checkbox" />
+                    <span>AppFolder (/Apps) を使用</span>
+                  </label>
+                  <label class="switch">
+                    <input id="entraAutoSyncToggle" type="checkbox" />
+                    <span>OneDrive自動保存</span>
+                  </label>
+                </div>
+                <label class="full">
                   Redirect URI
                   <input id="entraRedirectUriInput" type="url" placeholder="https://example.com" />
                 </label>
-                <p class="muted">
+                <p class="muted full">
                   現在のURL: <span id="entraRedirectUriHint"></span>
                   <button id="entraRedirectUriSetBtn" class="ghost" type="button">現在のURLをセット</button>
                 </p>
               </div>
-              <div class="sync-actions">
+              <div class="sync-actions" style="margin-top: 16px;">
                 <button id="entraLoginBtn" class="ghost">サインイン</button>
                 <button id="entraLogoutBtn" class="ghost">サインアウト</button>
-                <button id="entraConfigBtn" class="ghost">設定を保存</button>
+                <button id="entraConfigBtn" class="primary">設定を保存</button>
               </div>
-              <div class="sync-actions">
-                <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
-                <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
+              <div class="sync-actions" style="margin-top: 12px;">
+                <button id="entraLoadBtn" class="primary">OneDrive 読み込み</button>
+                <button id="entraSaveBtn" class="primary">OneDrive 保存 (添付込)</button>
               </div>
-              <p class="muted">
-                AppFolderを使う場合は、保存先パスはAppFolder内の相対パスだけ入力してください。
-              </p>
-              <p id="entraStatus" class="muted">未サインイン</p>
+              <div id="syncLog" class="sync-log"
+                style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 12px; line-height: 1.5;">
+                <div class="log-header"
+                  style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+                  動作履歴</div>
+                <div id="logContent" class="muted">まだ操作履歴はありません。</div>
+              </div>
             </div>
+
             <div class="sync-block">
-              <h3>Export / Import</h3>
+              <h3>ファイルとして保存 (バックアップ用)</h3>
               <div class="sync-actions">
-                <button id="exportMetaBtn" class="ghost">メタのみExport</button>
-                <button id="exportFullBtn" class="ghost">添付も含めるExport</button>
+                <button id="exportFullBtn" class="ghost">全データ(添付込)をExport</button>
                 <label class="ghost file-label">
                   Import
                   <input id="importInput" type="file" accept="application/json" hidden />
                 </label>
               </div>
-              <p class="muted">Importは安全のため上書きのみ対応します。</p>
+              <p class="muted" style="margin-top: 8px;">※Importは現在のデータを上書きし、添付ファイルも含めて復元します。</p>
             </div>
           </div>
         </section>
+        <div class="sync-actions">
+          <button id="entraLoginBtn" class="ghost">サインイン</button>
+          <button id="entraLogoutBtn" class="ghost">サインアウト</button>
+          <button id="entraConfigBtn" class="ghost">設定を保存</button>
+        </div>
+        <div class="sync-actions">
+          <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
+          <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
+        </div>
+        <p class="muted">
+          AppFolderを使う場合は、保存先パスはAppFolder内の相対パスだけ入力してください。
+        </p>
+        <p id="entraStatus" class="muted">未サインイン</p>
       </div>
+      <div class="sync-block">
+        <h3>Export / Import</h3>
+        <div class="sync-actions">
+          <button id="exportMetaBtn" class="ghost">メタのみExport</button>
+          <button id="exportFullBtn" class="ghost">添付も含めるExport</button>
+          <label class="ghost file-label">
+            Import
+            <input id="importInput" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+        <p class="muted">Importは安全のため上書きのみ対応します。</p>
+      </div>
+      </div>
+    </section>
+    </div>
     </section>
   </main>
 

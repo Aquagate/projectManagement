@@ -15,8 +15,6 @@ const state = {
 
 const settings = {
   autoSync: false,
-  lastSyncPath: null,
-  includeAttachmentsInSync: false,
 };
 
 const entraSettings = {
@@ -28,10 +26,8 @@ const entraSettings = {
   autoSync: false,
 };
 
-let syncHandle = null;
 let dbPromise = null;
 let saveDebounce = null;
-let syncDebounce = null;
 let msalInstance = null;
 let msalInitPromise = null;
 
@@ -65,17 +61,9 @@ const ui = {
   linkLabelInput: document.getElementById("linkLabelInput"),
   linkUrlInput: document.getElementById("linkUrlInput"),
   addLinkBtn: document.getElementById("addLinkBtn"),
-  linksList: document.getElementById("linksList"),
   fileInput: document.getElementById("fileInput"),
   attachmentsList: document.getElementById("attachmentsList"),
   attachmentPreview: document.getElementById("attachmentPreview"),
-  pickSyncFileBtn: document.getElementById("pickSyncFileBtn"),
-  loadSyncBtn: document.getElementById("loadSyncBtn"),
-  saveSyncBtn: document.getElementById("saveSyncBtn"),
-  autoSyncToggle: document.getElementById("autoSyncToggle"),
-  syncAttachmentsToggle: document.getElementById("syncAttachmentsToggle"),
-  syncStatus: document.getElementById("syncStatus"),
-  exportMetaBtn: document.getElementById("exportMetaBtn"),
   exportFullBtn: document.getElementById("exportFullBtn"),
   importInput: document.getElementById("importInput"),
   toast: document.getElementById("toast"),
@@ -95,6 +83,7 @@ const ui = {
   entraStatus: document.getElementById("entraStatus"),
   entraAutoSyncToggle: document.getElementById("entraAutoSyncToggle"),
   sidebarToggle: document.getElementById("sidebarToggle"),
+  logContent: document.getElementById("logContent"),
 };
 
 const STATUS_LABELS = {
@@ -122,6 +111,29 @@ function formatDate(iso) {
   if (!iso) return "-";
   const date = new Date(iso);
   return date.toLocaleString();
+}
+
+function addLog(message, type = "info") {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString();
+  const dateStr = now.toLocaleDateString();
+  const fullMsg = `${dateStr} ${timeStr} - ${message}`;
+
+  if (ui.logContent) {
+    if (ui.logContent.textContent === "まだ操作履歴はありません。") {
+      ui.logContent.innerHTML = "";
+    }
+    const div = document.createElement("div");
+    div.style.padding = "2px 0";
+    if (type === "error") div.style.color = "#dc2626";
+    if (type === "success") div.style.color = "#16a34a";
+    div.textContent = fullMsg;
+    ui.logContent.prepend(div);
+
+    while (ui.logContent.children.length > 8) {
+      ui.logContent.removeChild(ui.logContent.lastChild);
+    }
+  }
 }
 
 function openDb() {
@@ -211,8 +223,6 @@ function loadSettings() {
   try {
     const parsed = JSON.parse(raw);
     settings.autoSync = Boolean(parsed.autoSync);
-    settings.lastSyncPath = parsed.lastSyncPath || null;
-    settings.includeAttachmentsInSync = Boolean(parsed.includeAttachmentsInSync);
   } catch (error) {
     console.error(error);
   }
@@ -263,8 +273,6 @@ function persistSettings() {
     SETTINGS_KEY,
     JSON.stringify({
       autoSync: settings.autoSync,
-      lastSyncPath: settings.lastSyncPath,
-      includeAttachmentsInSync: settings.includeAttachmentsInSync,
     })
   );
 }
@@ -273,7 +281,6 @@ function scheduleSave() {
   if (saveDebounce) window.clearTimeout(saveDebounce);
   saveDebounce = window.setTimeout(() => {
     persistState();
-    if (settings.autoSync) scheduleSyncSave();
     if (entraSettings.autoSync) scheduleOneDriveSave();
   }, 400);
 }
@@ -283,13 +290,6 @@ function scheduleOneDriveSave() {
   window.oneDriveDebounce = window.setTimeout(() => {
     saveToOneDrive();
   }, 2000);
-}
-
-function scheduleSyncSave() {
-  if (syncDebounce) window.clearTimeout(syncDebounce);
-  syncDebounce = window.setTimeout(() => {
-    saveToSyncFile();
-  }, 1200);
 }
 
 function setSelected(id) {
@@ -886,74 +886,6 @@ async function importData(file) {
   }
 }
 
-async function ensureSyncHandle() {
-  if (syncHandle) return syncHandle;
-  syncHandle = await loadSyncHandle();
-  return syncHandle;
-}
-
-async function pickSyncFile() {
-  if (!window.showOpenFilePicker && !window.showSaveFilePicker) {
-    showToast("この機能はPC専用です。モバイルでは下の「OneDrive同期」をご利用ください。");
-    return;
-  }
-  try {
-    if (window.showOpenFilePicker) {
-      const [handle] = await window.showOpenFilePicker({
-        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
-        multiple: false,
-      });
-      syncHandle = handle;
-    } else {
-      syncHandle = await window.showSaveFilePicker({
-        suggestedName: "projects.json",
-        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
-      });
-    }
-    await saveSyncHandle(syncHandle);
-    ui.syncStatus.textContent = "同期ファイルを設定しました。";
-  } catch (error) {
-    console.error(error);
-    showToast("同期ファイルの選択に失敗しました。");
-  }
-}
-
-async function loadFromSyncFile() {
-  const handle = await ensureSyncHandle();
-  if (!handle) {
-    showToast("同期ファイルが未設定です。");
-    return;
-  }
-  try {
-    const file = await handle.getFile();
-    await importData(file);
-    ui.syncStatus.textContent = "同期ファイルを読み込みました。";
-  } catch (error) {
-    console.error(error);
-    showToast("同期ファイルの読み込みに失敗しました。");
-  }
-}
-
-async function saveToSyncFile() {
-  const handle = await ensureSyncHandle();
-  if (!handle) return;
-  try {
-    const permission = await handle.requestPermission({ mode: "readwrite" });
-    if (permission !== "granted") {
-      showToast("同期ファイルへの権限がありません。");
-      return;
-    }
-    const payload = await buildExportPayload(settings.includeAttachmentsInSync);
-    const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(payload, null, 2));
-    await writable.close();
-    ui.syncStatus.textContent = "同期ファイルへ保存しました。";
-  } catch (error) {
-    console.error(error);
-    showToast("同期ファイルへの保存に失敗しました。");
-  }
-}
-
 async function ensureMsalInstance() {
   if (!window.msal) {
     showToast("MSALが読み込まれていません。ネットワーク接続を確認してください。");
@@ -1053,8 +985,10 @@ async function entraLogin() {
     });
     msalApp.setActiveAccount(result.account);
     ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
+    addLog(`サインイン成功: ${result.account.username}`, "success");
   } catch (error) {
     console.error(error);
+    addLog(`サインイン失敗: ${error.message || error}`, "error");
     if (String(error?.message || "").includes("redirect_uri")) {
       ui.entraStatus.textContent = "サインインに失敗しました。設定を確認してください。";
       showToast("リダイレクトURIが一致しません。設定を再入力してください。");
@@ -1070,6 +1004,7 @@ async function entraLogout() {
   if (!account) return;
   await msalInstance.logoutPopup({ account });
   ui.entraStatus.textContent = "未サインイン";
+  addLog("サインアウトしました", "info");
 }
 
 async function getGraphToken() {
@@ -1139,8 +1074,10 @@ async function loadFromOneDrive() {
     const blob = await response.blob();
     await importData(blob);
     ui.entraStatus.textContent = "OneDriveから読み込みました。";
+    addLog("OneDrive 読み込み成功", "success");
   } catch (error) {
     console.error(error);
+    addLog(`OneDrive 読み込み失敗: ${error.status || error.message || error}`, "error");
     if (error?.status === 404) {
       ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。保存先パスを確認してください。";
       showToast("指定した保存先パスが見つかりません。");
@@ -1156,15 +1093,18 @@ async function loadFromOneDrive() {
 
 async function saveToOneDrive() {
   try {
-    const payload = await buildExportPayload(settings.includeAttachmentsInSync);
+    addLog("OneDrive 保存開始 (添付込)...", "info");
+    const payload = await buildExportPayload(true); // Always include attachments
     await graphRequest(buildGraphFileUrl(entraSettings.drivePath), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, null, 2),
     });
     ui.entraStatus.textContent = "OneDriveへ保存しました。";
+    addLog("OneDrive 保存成功", "success");
   } catch (error) {
     console.error(error);
+    addLog(`OneDrive 保存失敗: ${error.status || error.message || error}`, "error");
     if (error?.status === 401 || error?.status === 403) {
       ui.entraStatus.textContent = "OneDrive保存に失敗しました。権限を確認してください。";
       showToast("サインイン権限を確認してください。");
@@ -1316,26 +1256,6 @@ function bindEvents() {
     ui.fileInput.value = "";
   });
 
-  ui.pickSyncFileBtn.addEventListener("click", pickSyncFile);
-  ui.loadSyncBtn.addEventListener("click", loadFromSyncFile);
-  ui.saveSyncBtn.addEventListener("click", saveToSyncFile);
-  ui.autoSyncToggle.addEventListener("change", async () => {
-    if (ui.autoSyncToggle.checked && !syncHandle) {
-      showToast("先に同期ファイルを選択してください。");
-      await pickSyncFile();
-      ui.autoSyncToggle.checked = Boolean(syncHandle);
-      if (!syncHandle) return;
-    }
-    settings.autoSync = ui.autoSyncToggle.checked;
-    persistSettings();
-    if (settings.autoSync) scheduleSyncSave();
-  });
-  ui.syncAttachmentsToggle.addEventListener("change", () => {
-    settings.includeAttachmentsInSync = ui.syncAttachmentsToggle.checked;
-    persistSettings();
-  });
-
-  ui.exportMetaBtn.addEventListener("click", () => exportData(false));
   ui.exportFullBtn.addEventListener("click", () => exportData(true));
   ui.importInput.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
@@ -1392,14 +1312,8 @@ async function init() {
   loadSettings();
   loadEntraSettings();
   renderEntraSettings();
-  ui.autoSyncToggle.checked = settings.autoSync;
-  ui.syncAttachmentsToggle.checked = settings.includeAttachmentsInSync;
-  ui.entraAutoSyncToggle.checked = entraSettings.autoSync;
+  if (ui.entraAutoSyncToggle) ui.entraAutoSyncToggle.checked = entraSettings.autoSync;
   loadState();
-  syncHandle = await loadSyncHandle();
-  if (syncHandle) {
-    ui.syncStatus.textContent = "同期ファイルが設定されています。";
-  }
   if (!state.projects.length) {
     ui.sampleDataBtn.style.display = "inline-flex";
   }
