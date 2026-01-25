@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Hub</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.15.0/lib/msal-browser.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <header class="app-header">
+    <button id="sidebarToggle" class="sidebar-toggle-btn" aria-label="メニューを開閉">
+      <span class="hamburger-icon"></span>
+    </button>
+    <div>
+      <h1>Project Hub</h1>
+      <p class="subtitle">突発プロジェクトを一元管理</p>
+    </div>
+    <div class="header-actions">
+      <button id="newProjectBtn" class="primary">新規プロジェクト</button>
+      <button id="syncSettingsBtn" class="ghost">同期設定</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="search-section">
+        <label for="globalSearch">グローバル検索</label>
+        <input id="globalSearch" type="search" placeholder="タイトル/概要/タグ/リンク/Next Actions" />
+      </div>
+      <div class="filters">
+        <div>
+          <label for="statusFilter">状態</label>
+          <select id="statusFilter">
+            <option value="all">すべて</option>
+            <option value="idea">アイデア</option>
+            <option value="active">進行中</option>
+            <option value="stuck">停滞</option>
+            <option value="done">完了</option>
+          </select>
+        </div>
+        <div>
+          <label for="sortBy">並び替え</label>
+          <select id="sortBy">
+            <option value="updatedAt">最終更新</option>
+            <option value="priority">優先度</option>
+            <option value="dueDate">期限</option>
+          </select>
+        </div>
+      </div>
+      <div id="projectList" class="project-list"></div>
+      <div class="archive-section">
+        <div class="archive-header">
+          <h3>完了アーカイブ</h3>
+          <span id="archiveCount" class="muted"></span>
+        </div>
+        <div id="archiveList" class="project-list archive-list"></div>
+        <p id="archiveEmpty" class="muted archive-empty">アーカイブはまだありません。</p>
+      </div>
+      <div class="sidebar-footer">
+        <button id="sampleDataBtn" class="ghost">サンプルデータ投入</button>
+      </div>
+    </aside>
+
+    <section class="detail" id="detailView">
+      <div class="empty-state" id="emptyState">
+        <h2>プロジェクトを選択</h2>
+        <p>左の一覧からプロジェクトを選ぶか、新規作成してください。</p>
+      </div>
+
+      <div class="detail-content" id="detailContent">
+        <section class="card">
+          <div class="card-header">
+            <h2>基本情報</h2>
+            <div class="card-actions">
+              <button id="deleteProjectBtn" class="danger">削除</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label class="full">
+              タイトル
+              <input id="titleInput" type="text" required />
+            </label>
+            <label class="full">
+              概要
+              <textarea id="summaryInput" rows="2"></textarea>
+            </label>
+            <label>
+              タグ（カンマ区切り）
+              <input id="tagsInput" type="text" placeholder="例: marketing, urgent" />
+            </label>
+            <label>
+              熱量 (ワクワク感)
+              <select id="heatInput">
+                <option value="1">🔥 (低)</option>
+                <option value="2">🔥🔥 (中)</option>
+                <option value="3">🔥🔥🔥 (高)</option>
+              </select>
+            </label>
+            <label>
+              状態
+              <select id="statusInput">
+                <option value="idea">アイデア</option>
+                <option value="active">進行中</option>
+                <option value="stuck">停滞</option>
+                <option value="done">完了</option>
+              </select>
+            </label>
+            <label>
+              優先度
+              <select id="priorityInput">
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+              </select>
+            </label>
+            <label>
+              期限
+              <input id="dueDateInput" type="date" />
+            </label>
+            <label class="full">
+              重要な気づき (スナップショット)
+              <textarea id="contextSnapshotInput" rows="2" placeholder="3行程度でこの文脈の核心をメモ"></textarea>
+            </label>
+            <label class="full">
+              停滞理由
+              <textarea id="stuckReasonInput" rows="2"></textarea>
+            </label>
+            <div class="meta">
+              <span>最終更新: <span id="updatedAtLabel">-</span></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>再開時の自分への伝言 (クイックメモ)</h2>
+          </div>
+          <div class="form-grid">
+            <label class="full">
+              今の思考の残りカスを1タップで残す
+              <textarea id="resumeMemoInput" rows="3" placeholder="次に何から手をつけるべきか、何を考えていたか..."></textarea>
+            </label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>直近やること (Next Actions)</h2>
+            <div class="card-actions">
+              <button id="copyIncompleteBtn" class="ghost">未完了だけコピー</button>
+              <button id="copyAllBtn" class="ghost">全部コピー</button>
+              <button id="copySummaryBtn" class="ghost">概要＋次アクションをコピー</button>
+            </div>
+          </div>
+          <div class="quick-add">
+            <input id="quickActionInput" type="text" placeholder="Enterで追加" />
+            <button id="addActionBtn" class="primary">追加</button>
+          </div>
+          <ul id="actionsList" class="checklist"></ul>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>GPTチャットリンク</h2>
+          </div>
+          <div class="link-form">
+            <input id="linkLabelInput" type="text" placeholder="ラベル" />
+            <input id="linkUrlInput" type="url" placeholder="https://" />
+            <button id="addLinkBtn" class="primary">追加</button>
+          </div>
+          <ul id="linksList" class="link-list"></ul>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>ファイル/手順書</h2>
+          </div>
+          <div class="attachment-toolbar">
+            <input id="fileInput" type="file" multiple />
+          </div>
+          <div class="attachments">
+            <div id="attachmentsList" class="attachment-list"></div>
+            <div id="attachmentPreview" class="attachment-preview">
+              <p>ファイルを選択するとプレビューが表示されます。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="syncSection">
+          <div class="card-header">
+            <h2>同期 & エクスポート/インポート</h2>
+          </div>
+          <div class="sync-panel">
+            <div class="sync-block">
+              <h3>File System Access API</h3>
+              <div class="sync-actions">
+                <button id="pickSyncFileBtn" class="ghost">同期ファイルを選択</button>
+                <button id="loadSyncBtn" class="ghost">読み込み</button>
+                <button id="saveSyncBtn" class="ghost">保存</button>
+              </div>
+              <label class="switch">
+                <input id="autoSyncToggle" type="checkbox" />
+                <span>自動保存</span>
+              </label>
+              <label class="switch">
+                <input id="syncAttachmentsToggle" type="checkbox" />
+                <span>添付も同期</span>
+              </label>
+              <p id="syncStatus" class="muted">同期ファイル未設定</p>
+              <p class="muted">自動保存を使うには最初に同期ファイルを選択してください。</p>
+              <p class="muted">添付の同期はファイルサイズが大きい場合に時間がかかります。</p>
+            </div>
+            <div class="sync-block">
+              <h3>OneDrive (Entra ID)</h3>
+              <div class="form-grid">
+                <label>
+                  Client ID
+                  <input id="entraClientIdInput" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                </label>
+                <label>
+                  テナントID
+                  <input id="entraTenantIdInput" type="text" placeholder="common またはテナントID" />
+                </label>
+                <label>
+                  保存先パス
+                  <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
+                </label>
+                <label class="switch">
+                  <input id="entraAppFolderToggle" type="checkbox" />
+                  <span>AppFolder (/Apps) を使用</span>
+                </label>
+                <label class="switch">
+                  <input id="entraAutoSyncToggle" type="checkbox" />
+                  <span>OneDrive自動保存</span>
+                </label>
+                <label>
+                  Redirect URI
+                  <input id="entraRedirectUriInput" type="url" placeholder="https://example.com" />
+                </label>
+                <p class="muted">
+                  現在のURL: <span id="entraRedirectUriHint"></span>
+                  <button id="entraRedirectUriSetBtn" class="ghost" type="button">現在のURLをセット</button>
+                </p>
+              </div>
+              <div class="sync-actions">
+                <button id="entraLoginBtn" class="ghost">サインイン</button>
+                <button id="entraLogoutBtn" class="ghost">サインアウト</button>
+                <button id="entraConfigBtn" class="ghost">設定を保存</button>
+              </div>
+              <div class="sync-actions">
+                <button id="entraLoadBtn" class="ghost">OneDrive読み込み</button>
+                <button id="entraSaveBtn" class="ghost">OneDrive保存</button>
+              </div>
+              <p class="muted">
+                AppFolderを使う場合は、保存先パスはAppFolder内の相対パスだけ入力してください。
+              </p>
+              <p id="entraStatus" class="muted">未サインイン</p>
+            </div>
+            <div class="sync-block">
+              <h3>Export / Import</h3>
+              <div class="sync-actions">
+                <button id="exportMetaBtn" class="ghost">メタのみExport</button>
+                <button id="exportFullBtn" class="ghost">添付も含めるExport</button>
+                <label class="ghost file-label">
+                  Import
+                  <input id="importInput" type="file" accept="application/json" hidden />
+                </label>
+              </div>
+              <p class="muted">Importは安全のため上書きのみ対応します。</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" aria-live="polite"></div>
+</body>
+
+</html>
