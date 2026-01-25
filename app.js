@@ -61,6 +61,7 @@ const ui = {
   linkLabelInput: document.getElementById("linkLabelInput"),
   linkUrlInput: document.getElementById("linkUrlInput"),
   addLinkBtn: document.getElementById("addLinkBtn"),
+  linksList: document.getElementById("linksList"),
   fileInput: document.getElementById("fileInput"),
   attachmentsList: document.getElementById("attachmentsList"),
   attachmentPreview: document.getElementById("attachmentPreview"),
@@ -984,7 +985,7 @@ async function entraLogin() {
       scopes: ["User.Read", "Files.ReadWrite"],
     });
     msalApp.setActiveAccount(result.account);
-    ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
+    if (ui.entraStatus) ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
     addLog(`サインイン成功: ${result.account.username}`, "success");
   } catch (error) {
     console.error(error);
@@ -1003,7 +1004,7 @@ async function entraLogout() {
   const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
   if (!account) return;
   await msalInstance.logoutPopup({ account });
-  ui.entraStatus.textContent = "未サインイン";
+  if (ui.entraStatus) ui.entraStatus.textContent = "未サインイン";
   addLog("サインアウトしました", "info");
 }
 
@@ -1073,19 +1074,19 @@ async function loadFromOneDrive() {
     if (!response) return;
     const blob = await response.blob();
     await importData(blob);
-    ui.entraStatus.textContent = "OneDriveから読み込みました。";
+    if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveから読み込みました。";
     addLog("OneDrive 読み込み成功", "success");
   } catch (error) {
     console.error(error);
     addLog(`OneDrive 読み込み失敗: ${error.status || error.message || error}`, "error");
     if (error?.status === 404) {
-      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。保存先パスを確認してください。";
+      if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。保存先パスを確認してください。";
       showToast("指定した保存先パスが見つかりません。");
     } else if (error?.status === 401 || error?.status === 403) {
-      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。権限を確認してください。";
+      if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。権限を確認してください。";
       showToast("サインイン権限を確認してください。");
     } else {
-      ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。";
+      if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。";
       showToast("OneDrive読み込みに失敗しました。");
     }
   }
@@ -1100,16 +1101,16 @@ async function saveToOneDrive() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, null, 2),
     });
-    ui.entraStatus.textContent = "OneDriveへ保存しました。";
+    if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveへ保存しました。";
     addLog("OneDrive 保存成功", "success");
   } catch (error) {
     console.error(error);
     addLog(`OneDrive 保存失敗: ${error.status || error.message || error}`, "error");
     if (error?.status === 401 || error?.status === 403) {
-      ui.entraStatus.textContent = "OneDrive保存に失敗しました。権限を確認してください。";
+      if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive保存に失敗しました。権限を確認してください。";
       showToast("サインイン権限を確認してください。");
     } else {
-      ui.entraStatus.textContent = "OneDrive保存に失敗しました。";
+      if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive保存に失敗しました。";
       showToast("OneDrive保存に失敗しました。");
     }
   }
