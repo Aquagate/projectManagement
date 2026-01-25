@@ -531,9 +531,25 @@ button.ghost,
 
   .layout {
     grid-template-columns: 1fr;
-    padding: 16px 20px;
+    padding: 16px 10px;
     position: relative;
     overflow-x: hidden;
+  }
+
+  .detail {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  /* 入力欄が画面を突き抜けないように保証 */
+  input,
+  textarea,
+  select {
+    max-width: 100%;
+    width: 100%;
   }
 
   .sidebar {

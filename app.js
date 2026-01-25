@@ -894,7 +894,7 @@ async function ensureSyncHandle() {
 
 async function pickSyncFile() {
   if (!window.showOpenFilePicker && !window.showSaveFilePicker) {
-    showToast("このブラウザは同期機能に対応していません。");
+    showToast("この機能はPC専用です。モバイルでは下の「OneDrive同期」をご利用ください。");
     return;
   }
   try {
