@@ -63,6 +63,9 @@ const ui = {
   linkUrlInput: document.getElementById("linkUrlInput"),
   addLinkBtn: document.getElementById("addLinkBtn"),
   linksList: document.getElementById("linksList"),
+  toggleLinkFormBtn: document.getElementById("toggleLinkFormBtn"),
+  linkFormContainer: document.getElementById("linkFormContainer"),
+  linksEmpty: document.getElementById("linksEmpty"),
   fileInput: document.getElementById("fileInput"),
   attachmentsList: document.getElementById("attachmentsList"),
   attachmentPreview: document.getElementById("attachmentPreview"),
@@ -448,9 +451,16 @@ function updateProjectFromForm() {
   // Track status change
   if (updates.status && updates.status !== project.status) {
     addTimelineEntry(project, "status_changed", `${STATUS_LABELS[project.status]} → ${STATUS_LABELS[updates.status]}`);
+    // Auto-archive when status changes to "done"
+    if (updates.status === "done" && !project.archived) {
+      updates.archived = true;
+      updates.archivedAt = nowIso();
+      addTimelineEntry(project, "archived", "完了により自動アーカイブ");
+      showToast("完了したプロジェクトをアーカイブに移動しました");
+    }
   }
-  // Track archive/unarchive
-  if (updates.archived === true && !project.archived) {
+  // Track manual archive/unarchive
+  if (updates.archived === true && !project.archived && updates.status !== "done") {
     addTimelineEntry(project, "archived");
   } else if (updates.archived === false && project.archived) {
     addTimelineEntry(project, "unarchived");
@@ -779,21 +789,32 @@ function renderArchiveList() {
   const sorted = sortProjects(archived, "updatedAt");
   ui.archiveList.innerHTML = "";
   sorted.forEach((project) => {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = `project-card archived ${project.id === state.selectedId ? "active" : ""}`;
+    const card = document.createElement("div");
+    card.className = "archive-card";
     card.innerHTML = `
-      <div class="title">${project.title}</div>
-      <div class="meta">
-        <span class="status-pill status-${project.status}">${STATUS_LABELS[project.status]}</span>
-        <span>${project.archivedAt ? `アーカイブ: ${formatDate(project.archivedAt)}` : "アーカイブ済み"}</span>
-      </div>
+      <span class="archive-title">${project.title}</span>
+      <button class="ghost resume-btn" data-id="${project.id}">開発再開する</button>
     `;
-    card.addEventListener("click", () => setSelected(project.id));
+    card.querySelector(".resume-btn").addEventListener("click", () => {
+      resumeProject(project.id);
+    });
     ui.archiveList.appendChild(card);
   });
   ui.archiveCount.textContent = archived.length ? `(${archived.length})` : "";
   ui.archiveEmpty.style.display = archived.length ? "none" : "block";
+}
+
+function resumeProject(projectId) {
+  const project = state.projects.find((p) => p.id === projectId);
+  if (!project) return;
+  addTimelineEntry(project, "unarchived", "開発再開");
+  updateProject(project, {
+    archived: false,
+    archivedAt: null,
+    status: "active"
+  });
+  setSelected(projectId);
+  showToast("開発を再開しました");
 }
 
 function renderProjectDetail() {
@@ -856,15 +877,19 @@ function renderActions(project) {
 
 function renderLinks(project) {
   ui.linksList.innerHTML = "";
+  if (project.links.length === 0) {
+    ui.linksEmpty.style.display = "block";
+    return;
+  }
+  ui.linksEmpty.style.display = "none";
   project.links.forEach((link) => {
     const item = document.createElement("li");
-    item.className = "link-item";
+    item.className = "link-item-compact";
     item.innerHTML = `
-      <span>${link.label}</span>
-      <a href="${link.url}" target="_blank" rel="noopener">開く</a>
-      <div class="actions">
-        <button class="ghost" data-action="copy">コピー</button>
-        <button class="ghost" data-action="delete">削除</button>
+      <a href="${link.url}" target="_blank" rel="noopener" class="link-label">${link.label}</a>
+      <div class="link-actions">
+        <button class="ghost-icon" data-action="copy" title="コピー">📋</button>
+        <button class="ghost-icon" data-action="delete" title="削除">🗑️</button>
       </div>
     `;
     item.querySelector("button[data-action='copy']").addEventListener("click", () => {
@@ -1358,7 +1383,15 @@ function bindEvents() {
   ui.copyAllBtn.addEventListener("click", () => copyText(buildCopyText(true)));
   ui.copySummaryBtn.addEventListener("click", () => copyText(buildSummaryCopy()));
 
-  ui.addLinkBtn.addEventListener("click", addLink);
+  ui.addLinkBtn.addEventListener("click", () => {
+    addLink();
+    ui.linkFormContainer.style.display = "none";
+  });
+  ui.toggleLinkFormBtn.addEventListener("click", () => {
+    const isHidden = ui.linkFormContainer.style.display === "none";
+    ui.linkFormContainer.style.display = isHidden ? "grid" : "none";
+    ui.toggleLinkFormBtn.textContent = isHidden ? "− 閉じる" : "+ 追加";
+  });
 
   ui.fileInput.addEventListener("change", (event) => {
     const files = Array.from(event.target.files || []);
