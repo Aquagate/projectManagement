@@ -4,12 +4,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="description" content="突発プロジェクトを一元管理するローカルWebアプリ" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Project Hub</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.15.0/lib/msal-browser.min.js" defer></script>
   <script src="app.js" defer></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch((err) => {
+          console.warn("SW registration failed:", err);
+        });
+      });
+    }
+  </script>
 </head>
 
 <body>
@@ -190,6 +203,14 @@
               <p>ファイルを選択するとプレビューが表示されます。</p>
             </div>
           </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2>タイムライン</h2>
+          </div>
+          <ul id="timelineList" class="timeline-list"></ul>
+          <p id="timelineEmpty" class="muted">まだ履歴はありません。</p>
         </section>
 
         <section class="card" id="syncSection">

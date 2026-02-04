@@ -520,6 +520,39 @@ button.ghost,
   font-weight: 600;
 }
 
+/* Timeline Styles */
+.timeline-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.timeline-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid var(--primary);
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.timeline-label {
+  flex: 1;
+  color: var(--text);
+}
+
+.timeline-time {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 @media (max-width: 1024px) {
   .app-header {
     padding: 12px 20px;

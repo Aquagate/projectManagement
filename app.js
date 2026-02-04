@@ -7,6 +7,7 @@ const ATTACH_STORE = "attachments";
 const HANDLE_STORE = "handles";
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const EXPORT_ATTACHMENT_LIMIT = MAX_ATTACHMENT_SIZE;
+const TIMELINE_MAX_ENTRIES = 50;
 
 const state = {
   projects: [],
@@ -85,6 +86,8 @@ const ui = {
   entraAutoSyncToggle: document.getElementById("entraAutoSyncToggle"),
   sidebarToggle: document.getElementById("sidebarToggle"),
   logContent: document.getElementById("logContent"),
+  timelineList: document.getElementById("timelineList"),
+  timelineEmpty: document.getElementById("timelineEmpty"),
 };
 
 const STATUS_LABELS = {
@@ -114,6 +117,35 @@ function formatDate(iso) {
   return date.toLocaleString();
 }
 
+const TIMELINE_ACTION_LABELS = {
+  created: "プロジェクト作成",
+  status_changed: "ステータス変更",
+  action_added: "アクション追加",
+  action_completed: "アクション完了",
+  action_deleted: "アクション削除",
+  link_added: "リンク追加",
+  link_deleted: "リンク削除",
+  attachment_added: "添付追加",
+  attachment_deleted: "添付削除",
+  archived: "アーカイブ",
+  unarchived: "アーカイブ解除",
+};
+
+function addTimelineEntry(project, action, details = "") {
+  if (!project) return;
+  const entry = {
+    id: createId(),
+    action,
+    details,
+    timestamp: nowIso(),
+  };
+  project.timeline = project.timeline || [];
+  project.timeline.unshift(entry);
+  if (project.timeline.length > TIMELINE_MAX_ENTRIES) {
+    project.timeline = project.timeline.slice(0, TIMELINE_MAX_ENTRIES);
+  }
+}
+
 function addLog(message, type = "info") {
   const now = new Date();
   const timeStr = now.toLocaleTimeString();
@@ -136,6 +168,23 @@ function addLog(message, type = "info") {
     }
   }
 }
+
+function handleError(error, userMessage = "エラーが発生しました") {
+  console.error(error);
+  addLog(userMessage, "error");
+  showToast(userMessage);
+}
+
+// Online/Offline detection
+window.addEventListener("online", () => {
+  showToast("オンラインに復帰しました");
+  addLog("ネットワーク接続が復帰しました", "success");
+});
+
+window.addEventListener("offline", () => {
+  showToast("オフラインです。変更はローカルに保存されます");
+  addLog("オフラインモードになりました", "info");
+});
 
 function openDb() {
   if (dbPromise) return dbPromise;
@@ -327,9 +376,11 @@ function createProject() {
     attachments: [],
     archived: false,
     archivedAt: null,
+    timeline: [],
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
+  addTimelineEntry(newProject, "created");
   state.projects.unshift(newProject);
   setSelected(newProject.id);
 }
@@ -341,6 +392,7 @@ function normalizeProject(project) {
     heat: "2",
     resumeMemo: "",
     contextSnapshot: "",
+    timeline: [],
     ...project,
   };
 }
@@ -393,6 +445,16 @@ function updateProjectFromForm() {
     updates.archived = false;
     updates.archivedAt = null;
   }
+  // Track status change
+  if (updates.status && updates.status !== project.status) {
+    addTimelineEntry(project, "status_changed", `${STATUS_LABELS[project.status]} → ${STATUS_LABELS[updates.status]}`);
+  }
+  // Track archive/unarchive
+  if (updates.archived === true && !project.archived) {
+    addTimelineEntry(project, "archived");
+  } else if (updates.archived === false && project.archived) {
+    addTimelineEntry(project, "unarchived");
+  }
   updateProject(project, updates);
 }
 
@@ -408,6 +470,7 @@ function addNextAction(text) {
     order: project.nextActions.length,
   };
   project.nextActions.push(action);
+  addTimelineEntry(project, "action_added", action.text);
   updateProject(project, { nextActions: project.nextActions });
 }
 
@@ -416,6 +479,10 @@ function updateNextAction(actionId, updates) {
   if (!project) return;
   const action = project.nextActions.find((item) => item.id === actionId);
   if (!action) return;
+  // Track completion
+  if (updates.done === true && !action.done) {
+    addTimelineEntry(project, "action_completed", action.text);
+  }
   Object.assign(action, updates, { updatedAt: nowIso() });
   updateProject(project, { nextActions: project.nextActions });
 }
@@ -423,6 +490,10 @@ function updateNextAction(actionId, updates) {
 function deleteNextAction(actionId) {
   const project = getSelectedProject();
   if (!project) return;
+  const action = project.nextActions.find((item) => item.id === actionId);
+  if (action) {
+    addTimelineEntry(project, "action_deleted", action.text);
+  }
   project.nextActions = project.nextActions.filter((item) => item.id !== actionId);
   updateProject(project, { nextActions: project.nextActions });
 }
@@ -485,6 +556,7 @@ function addLink() {
     return;
   }
   project.links.push({ id: createId(), label, url });
+  addTimelineEntry(project, "link_added", label);
   ui.linkLabelInput.value = "";
   ui.linkUrlInput.value = "";
   updateProject(project, { links: project.links });
@@ -493,6 +565,10 @@ function addLink() {
 function deleteLink(linkId) {
   const project = getSelectedProject();
   if (!project) return;
+  const link = project.links.find((l) => l.id === linkId);
+  if (link) {
+    addTimelineEntry(project, "link_deleted", link.label);
+  }
   project.links = project.links.filter((link) => link.id !== linkId);
   updateProject(project, { links: project.links });
 }
@@ -535,6 +611,10 @@ async function handleFiles(files) {
     }
   }
   updateProject(project, { attachments: project.attachments });
+  // Record timeline for each added file
+  for (const file of files) {
+    addTimelineEntry(project, "attachment_added", file.name);
+  }
 }
 
 async function removeAttachment(attachmentId) {
@@ -543,6 +623,7 @@ async function removeAttachment(attachmentId) {
   const target = project.attachments.find((att) => att.id === attachmentId);
   if (!target) return;
   if (!confirm("この添付ファイルを削除しますか？")) return;
+  addTimelineEntry(project, "attachment_deleted", target.name);
   project.attachments = project.attachments.filter((att) => att.id !== attachmentId);
   if (target.stored) await deleteAttachmentBlob(target.id);
   updateProject(project, { attachments: project.attachments });
@@ -818,6 +899,30 @@ function renderAttachments(project) {
       removeAttachment(attachment.id);
     });
     ui.attachmentsList.appendChild(item);
+  });
+}
+
+function renderTimeline(project) {
+  if (!ui.timelineList || !ui.timelineEmpty) return;
+  ui.timelineList.innerHTML = "";
+  const timeline = project.timeline || [];
+  if (timeline.length === 0) {
+    ui.timelineEmpty.style.display = "block";
+    return;
+  }
+  ui.timelineEmpty.style.display = "none";
+  timeline.forEach((entry) => {
+    const item = document.createElement("li");
+    item.className = "timeline-item";
+    const label = TIMELINE_ACTION_LABELS[entry.action] || entry.action;
+    const details = entry.details ? `: ${entry.details}` : "";
+    const date = new Date(entry.timestamp);
+    const timeStr = date.toLocaleString();
+    item.innerHTML = `
+      <span class="timeline-label">${label}${details}</span>
+      <span class="timeline-time">${timeStr}</span>
+    `;
+    ui.timelineList.appendChild(item);
   });
 }
 
@@ -1156,6 +1261,10 @@ function render() {
   renderProjectList();
   renderProjectDetail();
   renderProjectDetailMore();
+  const selectedProject = getSelectedProject();
+  if (selectedProject) {
+    renderTimeline(selectedProject);
+  }
   ui.sampleDataBtn.style.display = getActiveProjects().length ? "none" : "inline-flex";
 }
 
