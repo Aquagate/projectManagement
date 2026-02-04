@@ -8,6 +8,10 @@ const HANDLE_STORE = "handles";
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const EXPORT_ATTACHMENT_LIMIT = MAX_ATTACHMENT_SIZE;
 const TIMELINE_MAX_ENTRIES = 50;
+const SYNC_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+let lastSyncTime = null;
+let syncStatus = 'idle'; // 'idle' | 'saving' | 'syncing' | 'error'
 
 const state = {
   projects: [],
@@ -179,15 +183,124 @@ function handleError(error, userMessage = "エラーが発生しました") {
 }
 
 // Online/Offline detection
-window.addEventListener("online", () => {
+window.addEventListener("online", async () => {
   showToast("オンラインに復帰しました");
   addLog("ネットワーク接続が復帰しました", "success");
+  updateSyncIndicator();
+  if (entraSettings.autoSync && entraSettings.clientId) {
+    addLog("オンライン復帰: OneDrive同期を開始します...", "info");
+    await saveToOneDrive();
+  }
 });
 
 window.addEventListener("offline", () => {
   showToast("オフラインです。変更はローカルに保存されます");
   addLog("オフラインモードになりました", "info");
+  updateSyncIndicator();
 });
+
+// Focus-based sync check
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+    updateSyncIndicator();
+    // Check OneDrive for updates if auto-sync is enabled and 5+ minutes since last sync
+    if (entraSettings.autoSync && entraSettings.clientId && navigator.onLine) {
+      const timeSinceLastSync = lastSyncTime ? Date.now() - lastSyncTime.getTime() : Infinity;
+      if (timeSinceLastSync >= SYNC_CHECK_INTERVAL) {
+        await checkOneDriveForUpdates();
+      }
+    }
+  }
+});
+
+// Sync status indicator
+function updateSyncIndicator() {
+  const indicator = document.getElementById('syncIndicator');
+  if (!indicator) return;
+
+  const statusConfig = {
+    idle: { icon: '✓', text: '同期完了', class: 'sync-idle' },
+    saving: { icon: '⏳', text: '保存中...', class: 'sync-saving' },
+    syncing: { icon: '☁️', text: 'OneDrive同期中...', class: 'sync-syncing' },
+    error: { icon: '⚠️', text: '同期エラー', class: 'sync-error' }
+  };
+
+  const config = statusConfig[syncStatus] || statusConfig.idle;
+  const lastSyncStr = lastSyncTime ? `最終: ${lastSyncTime.toLocaleTimeString()}` : '';
+  const offlineBadge = !navigator.onLine ? '<span class="offline-badge">オフライン</span>' : '';
+
+  indicator.className = `sync-indicator ${config.class}`;
+  indicator.innerHTML = `
+    <span class="sync-icon">${config.icon}</span>
+    <span class="sync-text">${config.text}</span>
+    ${lastSyncStr ? `<span class="sync-time">${lastSyncStr}</span>` : ''}
+    ${offlineBadge}
+  `;
+}
+
+// Check OneDrive for newer data
+async function checkOneDriveForUpdates() {
+  if (!entraSettings.clientId || !navigator.onLine) return;
+
+  try {
+    const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath));
+    if (!response) return;
+
+    const blob = await response.blob();
+    const text = await blob.text();
+    const remoteData = JSON.parse(text);
+
+    // Find the latest updatedAt from remote projects
+    const remoteLatest = remoteData.projects?.reduce((latest, p) => {
+      const pDate = new Date(p.updatedAt);
+      return pDate > latest ? pDate : latest;
+    }, new Date(0)) || new Date(0);
+
+    // Find the latest updatedAt from local projects
+    const localLatest = state.projects.reduce((latest, p) => {
+      const pDate = new Date(p.updatedAt);
+      return pDate > latest ? pDate : latest;
+    }, new Date(0));
+
+    // If remote is newer, show notification
+    if (remoteLatest > localLatest) {
+      showSyncNotification();
+    }
+  } catch (error) {
+    console.error('OneDrive check failed:', error);
+    // Silent fail - don't bother user with check errors
+  }
+}
+
+// Show sync notification bar
+function showSyncNotification() {
+  let bar = document.getElementById('syncNotificationBar');
+  if (bar) {
+    bar.style.display = 'flex';
+    return;
+  }
+
+  bar = document.createElement('div');
+  bar.id = 'syncNotificationBar';
+  bar.className = 'sync-notification-bar';
+  bar.innerHTML = `
+    <span class="sync-notification-icon">🔄</span>
+    <span class="sync-notification-text">OneDriveに新しいデータがあります</span>
+    <button class="sync-notification-btn primary" id="syncLoadBtn">読み込む</button>
+    <button class="sync-notification-btn ghost" id="syncDismissBtn">無視</button>
+  `;
+
+  document.body.insertBefore(bar, document.body.firstChild);
+
+  document.getElementById('syncLoadBtn').addEventListener('click', async () => {
+    bar.style.display = 'none';
+    await loadFromOneDrive();
+  });
+
+  document.getElementById('syncDismissBtn').addEventListener('click', () => {
+    bar.style.display = 'none';
+  });
+}
 
 function openDb() {
   if (dbPromise) return dbPromise;
@@ -332,8 +445,12 @@ function persistSettings() {
 
 function scheduleSave() {
   if (saveDebounce) window.clearTimeout(saveDebounce);
+  syncStatus = 'saving';
+  updateSyncIndicator();
   saveDebounce = window.setTimeout(() => {
     persistState();
+    syncStatus = 'idle';
+    updateSyncIndicator();
     if (entraSettings.autoSync) scheduleOneDriveSave();
   }, 400);
 }
@@ -1199,16 +1316,27 @@ function buildGraphFileUrl(path) {
 }
 
 async function loadFromOneDrive() {
+  syncStatus = 'syncing';
+  updateSyncIndicator();
   try {
     const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath));
-    if (!response) return;
+    if (!response) {
+      syncStatus = 'idle';
+      updateSyncIndicator();
+      return;
+    }
     const blob = await response.blob();
     await importData(blob);
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveから読み込みました。";
     addLog("OneDrive 読み込み成功", "success");
+    lastSyncTime = new Date();
+    syncStatus = 'idle';
+    updateSyncIndicator();
   } catch (error) {
     console.error(error);
     addLog(`OneDrive 読み込み失敗: ${error.status || error.message || error}`, "error");
+    syncStatus = 'error';
+    updateSyncIndicator();
     if (error?.status === 404) {
       if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive読み込みに失敗しました。保存先パスを確認してください。";
       showToast("指定した保存先パスが見つかりません。");
@@ -1223,6 +1351,8 @@ async function loadFromOneDrive() {
 }
 
 async function saveToOneDrive() {
+  syncStatus = 'syncing';
+  updateSyncIndicator();
   try {
     addLog("OneDrive 保存開始 (添付込)...", "info");
     const payload = await buildExportPayload(true); // Always include attachments
@@ -1233,9 +1363,14 @@ async function saveToOneDrive() {
     });
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveへ保存しました。";
     addLog("OneDrive 保存成功", "success");
+    lastSyncTime = new Date();
+    syncStatus = 'idle';
+    updateSyncIndicator();
   } catch (error) {
     console.error(error);
     addLog(`OneDrive 保存失敗: ${error.status || error.message || error}`, "error");
+    syncStatus = 'error';
+    updateSyncIndicator();
     if (error?.status === 401 || error?.status === 403) {
       if (ui.entraStatus) ui.entraStatus.textContent = "OneDrive保存に失敗しました。権限を確認してください。";
       showToast("サインイン権限を確認してください。");
