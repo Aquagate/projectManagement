@@ -1557,6 +1557,7 @@ function bindEvents() {
     entraSettings.autoSync = ui.entraAutoSyncToggle.checked;
     persistEntraSettings();
     if (entraSettings.autoSync) scheduleOneDriveSave();
+    updateEntraButtonsVisibility();
   });
   ui.sidebarToggle.addEventListener("click", () => toggleSidebar());
 
@@ -1586,11 +1587,18 @@ function bindEvents() {
   });
 }
 
+function updateEntraButtonsVisibility() {
+  const isAutoSync = entraSettings.autoSync;
+  if (ui.entraLoadBtn) ui.entraLoadBtn.style.display = isAutoSync ? 'none' : 'inline-flex';
+  if (ui.entraSaveBtn) ui.entraSaveBtn.style.display = isAutoSync ? 'none' : 'inline-flex';
+}
+
 async function init() {
   loadSettings();
   loadEntraSettings();
   renderEntraSettings();
   if (ui.entraAutoSyncToggle) ui.entraAutoSyncToggle.checked = entraSettings.autoSync;
+  updateEntraButtonsVisibility();
   loadState();
   if (!state.projects.length) {
     ui.sampleDataBtn.style.display = "inline-flex";
