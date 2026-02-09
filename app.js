@@ -2035,6 +2035,12 @@ if (saveSettingsBtn) {
   saveSettingsBtn.addEventListener('click', saveOneDriveSettings);
 }
 
+// Bind connect button
+const entraConnectBtn = document.getElementById('entraConnectBtn');
+if (entraConnectBtn) {
+  entraConnectBtn.addEventListener('click', entraLogin);
+}
+
 // Load settings on page load
 document.addEventListener('DOMContentLoaded', loadOneDriveSettings);
 
