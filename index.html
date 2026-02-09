@@ -55,18 +55,20 @@
           <label for="statusFilter">状態</label>
           <select id="statusFilter">
             <option value="all">すべて</option>
+            <option value="weekend">🔥 休みにやること</option>
             <option value="idea">アイデア</option>
             <option value="active">進行中</option>
             <option value="stuck">停滞</option>
             <option value="done">完了</option>
+            <option value="showcase">🏆 殿堂入り</option>
           </select>
         </div>
         <div>
           <label for="sortBy">並び替え</label>
           <select id="sortBy">
+            <option value="heat">熱量</option>
             <option value="updatedAt">最終更新</option>
             <option value="priority">優先度</option>
-            <option value="dueDate">期限</option>
           </select>
         </div>
       </div>
@@ -85,212 +87,253 @@
     </aside>
 
     <section class="detail" id="detailView">
-      <div class="empty-state" id="emptyState">
-        <h2>プロジェクトを選択</h2>
-        <p>左の一覧からプロジェクトを選ぶか、新規作成してください。</p>
+      <!-- Dashboard Stats (PC only) -->
+      <div class="dashboard-stats" id="dashboardStats">
+        <div class="stat-card">
+          <span class="stat-value" id="statActive">0</span>
+          <span class="stat-label">進行中</span>
+        </div>
+        <div class="stat-card stat-warning">
+          <span class="stat-value" id="statStuck">0</span>
+          <span class="stat-label">停滞</span>
+        </div>
+        <div class="stat-card stat-idea">
+          <span class="stat-value" id="statIdea">0</span>
+          <span class="stat-label">アイデア</span>
+        </div>
+        <div class="stat-card stat-showcase">
+          <span class="stat-value" id="statShowcase">0</span>
+          <span class="stat-label">🏆殿堂</span>
+        </div>
+        <div class="dashboard-actions">
+          <button onclick="weeklyReflection()" class="ghost small" title="週間振り返り">📅</button>
+          <button onclick="askForNewIdeas()" class="ghost small" title="殿堂入りからアイデア生成">💡</button>
+        </div>
+        <div class="view-toggle">
+          <button id="viewCardBtn" class="view-btn active" title="カードビュー">📋</button>
+          <button id="viewTableBtn" class="view-btn" title="テーブルビュー">📊</button>
+        </div>
       </div>
 
-      <div class="detail-content" id="detailContent">
-        <section class="card">
-          <div class="card-header">
-            <h2>基本情報</h2>
-            <div class="card-actions">
-              <button id="deleteProjectBtn" class="danger">削除</button>
+      <!-- Table View (PC only) -->
+      <div class="table-view hidden" id="tableView">
+        <table class="project-table">
+          <thead>
+            <tr>
+              <th>タイトル</th>
+              <th>ステータス</th>
+              <th>優先度</th>
+              <th>熱量</th>
+              <th>期限</th>
+              <th>未完了</th>
+              <th>更新日</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Card View (Default) -->
+      <div class="card-view" id="cardView">
+        <div class="empty-state" id="emptyState">
+          <h2>プロジェクトを選択</h2>
+          <p>左の一覧からプロジェクトを選ぶか、新規作成してください。</p>
+        </div>
+
+        <div class="detail-content" id="detailContent">
+          <section class="card">
+            <div class="card-header">
+              <h2>基本情報</h2>
+              <div class="card-actions">
+                <button id="askAiBtn" class="ghost" onclick="window.askAiCoach()">🤖 AIに相談</button>
+                <button id="deleteProjectBtn" class="danger">削除</button>
+              </div>
             </div>
-          </div>
-          <div class="form-grid">
-            <label class="full">
-              タイトル
-              <input id="titleInput" type="text" required />
-            </label>
-            <label class="full">
-              概要
-              <textarea id="summaryInput" rows="2"></textarea>
-            </label>
-            <label>
-              タグ（カンマ区切り）
-              <input id="tagsInput" type="text" placeholder="例: marketing, urgent" />
-            </label>
-            <label>
-              熱量 (ワクワク感)
-              <select id="heatInput">
-                <option value="1">🔥 (低)</option>
-                <option value="2">🔥🔥 (中)</option>
-                <option value="3">🔥🔥🔥 (高)</option>
-              </select>
-            </label>
-            <label>
-              状態
-              <select id="statusInput">
-                <option value="idea">アイデア</option>
-                <option value="active">進行中</option>
-                <option value="stuck">停滞</option>
-                <option value="done">完了</option>
-              </select>
-            </label>
-            <label>
-              優先度
-              <select id="priorityInput">
-                <option value="low">低</option>
-                <option value="medium">中</option>
-                <option value="high">高</option>
-              </select>
-            </label>
-            <label>
-              期限
-              <input id="dueDateInput" type="date" />
-            </label>
-            <label class="full">
-              重要な気づき (スナップショット)
-              <textarea id="contextSnapshotInput" rows="2" placeholder="3行程度でこの文脈の核心をメモ"></textarea>
-            </label>
-            <label class="full">
-              停滞理由
-              <textarea id="stuckReasonInput" rows="2"></textarea>
-            </label>
-            <div class="meta">
-              <span>最終更新: <span id="updatedAtLabel">-</span></span>
+            <div class="form-grid">
+              <label class="full">
+                タイトル
+                <input id="titleInput" type="text" required />
+              </label>
+              <label class="full">
+                概要
+                <textarea id="summaryInput" rows="2"></textarea>
+              </label>
+              <label>
+                タグ（カンマ区切り）
+                <input id="tagsInput" type="text" placeholder="例: marketing, urgent" />
+              </label>
+              <label>
+                熱量 (ワクワク感)
+                <select id="heatInput">
+                  <option value="1">🔥 (低)</option>
+                  <option value="2">🔥🔥 (中)</option>
+                  <option value="3">🔥🔥🔥 (高)</option>
+                </select>
+              </label>
+              <label>
+                状態
+                <select id="statusInput">
+                  <option value="idea">アイデア</option>
+                  <option value="active">進行中</option>
+                  <option value="stuck">停滞</option>
+                  <option value="done">完了</option>
+                  <option value="showcase">🏆 殿堂入り</option>
+                </select>
+              </label>
+              <label>
+                優先度
+                <select id="priorityInput">
+                  <option value="low">低</option>
+                  <option value="medium">中</option>
+                  <option value="high">高</option>
+                </select>
+              </label>
+              <label>
+                期限
+                <input id="dueDateInput" type="date" />
+              </label>
+              <label class="full">
+                重要な気づき (スナップショット)
+                <textarea id="contextSnapshotInput" rows="2" placeholder="3行程度でこの文脈の核心をメモ"></textarea>
+              </label>
+              <label class="full">
+                停滞理由
+                <textarea id="stuckReasonInput" rows="2"></textarea>
+              </label>
+              <div class="meta">
+                <span>最終更新: <span id="updatedAtLabel">-</span></span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section class="card">
-          <div class="card-header">
-            <h2>再開時の自分への伝言 (クイックメモ)</h2>
-          </div>
-          <div class="form-grid">
-            <label class="full">
-              今の思考の残りカスを1タップで残す
-              <textarea id="resumeMemoInput" rows="3" placeholder="次に何から手をつけるべきか、何を考えていたか..."></textarea>
-            </label>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <h2>直近やること (Next Actions)</h2>
-            <div class="card-actions">
-              <button id="copyIncompleteBtn" class="ghost">未完了だけコピー</button>
-              <button id="copyAllBtn" class="ghost">全部コピー</button>
-              <button id="copySummaryBtn" class="ghost">概要＋次アクションをコピー</button>
+          <section class="card">
+            <div class="card-header">
+              <h2>再開時の自分への伝言 (クイックメモ)</h2>
             </div>
-          </div>
-          <div class="quick-add">
-            <input id="quickActionInput" type="text" placeholder="Enterで追加" />
-            <button id="addActionBtn" class="primary">追加</button>
-          </div>
-          <ul id="actionsList" class="checklist"></ul>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <h2>リンク</h2>
-            <button id="toggleLinkFormBtn" class="ghost">+ 追加</button>
-          </div>
-          <div id="linkFormContainer" class="link-form" style="display: none;">
-            <input id="linkLabelInput" type="text" placeholder="ラベル" />
-            <input id="linkUrlInput" type="url" placeholder="https://" />
-            <button id="addLinkBtn" class="primary">追加</button>
-          </div>
-          <ul id="linksList" class="link-list-compact"></ul>
-          <p id="linksEmpty" class="muted" style="display: none;">リンクはまだありません</p>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <h2>ファイル/手順書</h2>
-          </div>
-          <div class="attachment-toolbar">
-            <input id="fileInput" type="file" multiple />
-          </div>
-          <div class="attachments">
-            <div id="attachmentsList" class="attachment-list"></div>
-            <div id="attachmentPreview" class="attachment-preview">
-              <p>ファイルを選択するとプレビューが表示されます。</p>
+            <div class="form-grid">
+              <label class="full">
+                今の思考の残りカスを1タップで残す
+                <textarea id="resumeMemoInput" rows="3" placeholder="次に何から手をつけるべきか、何を考えていたか..."></textarea>
+              </label>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section class="card">
-          <div class="card-header">
-            <h2>タイムライン</h2>
-          </div>
-          <ul id="timelineList" class="timeline-list"></ul>
-          <p id="timelineEmpty" class="muted">まだ履歴はありません。</p>
-        </section>
+          <section class="card">
+            <div class="card-header">
+              <h2>直近やること (Next Actions)</h2>
+              <div class="card-actions">
+                <button id="copyIncompleteBtn" class="ghost">未完了だけコピー</button>
+                <button id="copyAllBtn" class="ghost">全部コピー</button>
+                <button id="copySummaryBtn" class="ghost">概要＋次アクションをコピー</button>
+              </div>
+            </div>
+            <div class="quick-add">
+              <input id="quickActionInput" type="text" placeholder="Enterで追加" />
+              <button id="addActionBtn" class="primary">追加</button>
+            </div>
+            <ul id="actionsList" class="checklist"></ul>
+          </section>
 
-        <section class="card" id="syncSection">
-          <div class="card-header">
-            <h2>同期 & エクスポート</h2>
-          </div>
-          <div class="sync-panel">
-            <div class="sync-block">
-              <h3>OneDrive (Entra ID) 一本化</h3>
-              <div class="form-grid">
-                <label>
-                  Client ID
-                  <input id="entraClientIdInput" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-                </label>
-                <label>
-                  テナントID
-                  <input id="entraTenantIdInput" type="text" placeholder="common またはテナントID" />
-                </label>
-                <label>
-                  保存先パス
-                  <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
-                </label>
-                <div class="switch-group" style="display: flex; gap: 16px; align-items: center;">
-                  <label class="switch">
-                    <input id="entraAppFolderToggle" type="checkbox" />
-                    <span>AppFolder (/Apps) を使用</span>
+          <section class="card">
+            <div class="card-header">
+              <h2>リンク</h2>
+              <button id="toggleLinkFormBtn" class="ghost">+ 追加</button>
+            </div>
+            <div id="linkFormContainer" class="link-form" style="display: none;">
+              <input id="linkLabelInput" type="text" placeholder="ラベル" />
+              <input id="linkUrlInput" type="url" placeholder="https://" />
+              <button id="addLinkBtn" class="primary">追加</button>
+            </div>
+            <ul id="linksList" class="link-list-compact"></ul>
+            <p id="linksEmpty" class="muted" style="display: none;">リンクはまだありません</p>
+          </section>
+
+          <section class="card">
+            <div class="card-header">
+              <h2>ファイル/手順書</h2>
+            </div>
+            <div class="attachment-toolbar">
+              <input id="fileInput" type="file" multiple />
+            </div>
+            <div class="attachments">
+              <div id="attachmentsList" class="attachment-list"></div>
+              <div id="attachmentPreview" class="attachment-preview">
+                <p>ファイルを選択するとプレビューが表示されます。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header">
+              <h2>タイムライン</h2>
+            </div>
+            <ul id="timelineList" class="timeline-list"></ul>
+            <p id="timelineEmpty" class="muted">まだ履歴はありません。</p>
+          </section>
+
+          <section class="card" id="syncSection">
+            <div class="card-header">
+              <h2>同期 & エクスポート</h2>
+            </div>
+            <div class="sync-panel">
+              <div class="sync-block">
+                <h3>OneDrive 同期設定</h3>
+                <div class="form-grid compact">
+                  <label>
+                    Client ID
+                    <input id="entraClientIdInput" type="text" placeholder="Azure App Client ID" />
                   </label>
-                  <label class="switch">
-                    <input id="entraAutoSyncToggle" type="checkbox" />
-                    <span>OneDrive自動保存</span>
+                  <label>
+                    保存先
+                    <input id="entraDrivePathInput" type="text" placeholder="ProjectHub/projects.json" />
                   </label>
                 </div>
-                <label class="full">
-                  Redirect URI
-                  <input id="entraRedirectUriInput" type="url" placeholder="https://example.com" />
-                </label>
-                <p class="muted full">
-                  現在のURL: <span id="entraRedirectUriHint"></span>
-                  <button id="entraRedirectUriSetBtn" class="ghost" type="button">現在のURLをセット</button>
-                </p>
-              </div>
-              <div class="sync-actions" style="margin-top: 16px;">
-                <button id="entraLoginBtn" class="ghost">サインイン</button>
-                <button id="entraLogoutBtn" class="ghost">サインアウト</button>
-                <button id="entraConfigBtn" class="primary">設定を保存</button>
-              </div>
-              <div class="sync-actions" style="margin-top: 12px;">
-                <button id="entraLoadBtn" class="primary">OneDrive 読み込み</button>
-                <button id="entraSaveBtn" class="primary">OneDrive 保存 (添付込)</button>
-              </div>
-              <p id="entraStatus" class="muted" style="margin-top: 12px;">未サインイン</p>
-              <div id="syncLog" class="sync-log"
-                style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 12px; line-height: 1.5;">
-                <div class="log-header"
-                  style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
-                  動作履歴</div>
-                <div id="logContent" class="muted">まだ操作履歴はありません。</div>
+                <div class="sync-status-row">
+                  <span id="entraStatus" class="sync-badge">未接続</span>
+                  <span class="sync-info">起動時に自動で読込・変更時に自動保存</span>
+                </div>
+                <details class="sync-advanced">
+                  <summary>詳細設定</summary>
+                  <div class="form-grid compact">
+                    <label>
+                      テナントID
+                      <input id="entraTenantIdInput" type="text" placeholder="common" />
+                    </label>
+                    <label>
+                      Redirect URI
+                      <input id="entraRedirectUriInput" type="url" placeholder="現在のURL" />
+                    </label>
+                    <div class="switch-group">
+                      <label class="switch">
+                        <input id="entraAppFolderToggle" type="checkbox" />
+                        <span>AppFolder</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="sync-actions compact">
+                    <button id="entraRedirectUriSetBtn" class="ghost small">現URL設定</button>
+                    <button id="entraLogoutBtn" class="ghost small">サインアウト</button>
+                    <span class="divider">|</span>
+                    <button id="exportFullBtn" class="ghost small">Export</button>
+                    <label class="ghost small file-label">
+                      Import
+                      <input id="importInput" type="file" accept="application/json" hidden />
+                    </label>
+                  </div>
+                </details>
+                <input id="entraAutoSyncToggle" type="checkbox" checked hidden />
+                <details class="sync-log-details">
+                  <summary>動作履歴</summary>
+                  <div id="syncLog" class="sync-log">
+                    <div id="logContent" class="muted">まだ操作履歴はありません。</div>
+                  </div>
+                </details>
               </div>
             </div>
-
-            <div class="sync-block">
-              <h3>ファイルとして保存 (バックアップ用)</h3>
-              <div class="sync-actions">
-                <button id="exportFullBtn" class="ghost">全データ(添付込)をExport</button>
-                <label class="ghost file-label">
-                  Import
-                  <input id="importInput" type="file" accept="application/json" hidden />
-                </label>
-              </div>
-              <p class="muted" style="margin-top: 8px;">※Importは現在のデータを上書きし、添付ファイルも含めて復元します。</p>
-            </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      </div><!-- end cardView -->
     </section>
   </main>
 

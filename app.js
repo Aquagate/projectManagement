@@ -102,6 +102,7 @@ const STATUS_LABELS = {
   active: "進行中",
   stuck: "停滞",
   done: "完了",
+  showcase: "殿堂入り",
 };
 
 const PRIORITY_LABELS = {
@@ -826,7 +827,9 @@ function matchesSearch(project, query) {
 
 function sortProjects(projects, sortBy) {
   const sorted = [...projects];
-  if (sortBy === "priority") {
+  if (sortBy === "heat") {
+    sorted.sort((a, b) => (parseInt(b.heat) || 2) - (parseInt(a.heat) || 2));
+  } else if (sortBy === "priority") {
     const order = { high: 0, medium: 1, low: 2 };
     sorted.sort((a, b) => (order[a.priority] ?? 3) - (order[b.priority] ?? 3));
   } else if (sortBy === "dueDate") {
@@ -854,6 +857,12 @@ function renderProjectList() {
   const statusFilter = ui.statusFilter.value;
   const sortBy = ui.sortBy.value;
   const filtered = getActiveProjects().filter((project) => {
+    // Weekend filter: active/idea with heat >= 3
+    if (statusFilter === "weekend") {
+      const heat = parseInt(project.heat) || 2;
+      return (project.status === "active" || project.status === "idea") &&
+        heat >= 3 && matchesSearch(project, query);
+    }
     if (statusFilter !== "all" && project.status !== statusFilter) return false;
     return matchesSearch(project, query);
   });
@@ -1417,10 +1426,97 @@ function renderProjectDetailMore() {
   document.getElementById("contextSnapshotInput").value = project.contextSnapshot || "";
 }
 
+// ==========================================
+// Dashboard Stats & View Toggle (Phase 2)
+// ==========================================
+
+let currentView = 'card'; // 'card' or 'table'
+
+function updateDashboardStats() {
+  const projects = getActiveProjects();
+  const activeCount = projects.filter(p => p.status === 'active').length;
+  const stuckCount = projects.filter(p => p.status === 'stuck').length;
+  const ideaCount = projects.filter(p => p.status === 'idea').length;
+  const showcaseCount = projects.filter(p => p.status === 'showcase').length;
+
+  const statActive = document.getElementById('statActive');
+  const statStuck = document.getElementById('statStuck');
+  const statIdea = document.getElementById('statIdea');
+  const statShowcase = document.getElementById('statShowcase');
+
+  if (statActive) statActive.textContent = activeCount;
+  if (statStuck) statStuck.textContent = stuckCount;
+  if (statIdea) statIdea.textContent = ideaCount;
+  if (statShowcase) statShowcase.textContent = showcaseCount;
+}
+
+function renderTableView() {
+  const tableBody = document.getElementById('tableBody');
+  if (!tableBody) return;
+
+  const query = ui.globalSearch.value.trim();
+  const statusFilter = ui.statusFilter.value;
+  const sortBy = ui.sortBy.value;
+
+  const filtered = getActiveProjects().filter((project) => {
+    if (statusFilter !== "all" && project.status !== statusFilter) return false;
+    return matchesSearch(project, query);
+  });
+  const sorted = sortProjects(filtered, sortBy);
+
+  tableBody.innerHTML = sorted.map(project => {
+    const pendingActions = project.nextActions.filter(a => !a.done).length;
+    const heat = '🔥'.repeat(parseInt(project.heat || 2));
+    const isSelected = project.id === state.selectedId;
+
+    return `
+      <tr data-id="${project.id}" class="${isSelected ? 'selected' : ''}" onclick="window.selectProjectFromTable('${project.id}')">
+        <td class="title-cell">${project.title}</td>
+        <td><span class="status-pill status-${project.status}">${STATUS_LABELS[project.status]}</span></td>
+        <td>${PRIORITY_LABELS[project.priority]}</td>
+        <td class="heat-cell">${heat}</td>
+        <td>${project.dueDate || '-'}</td>
+        <td>${pendingActions}</td>
+        <td class="date-cell">${formatDate(project.updatedAt)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function switchView(view) {
+  currentView = view;
+  const cardView = document.getElementById('cardView');
+  const tableView = document.getElementById('tableView');
+  const cardBtn = document.getElementById('viewCardBtn');
+  const tableBtn = document.getElementById('viewTableBtn');
+
+  if (view === 'table') {
+    if (cardView) cardView.classList.add('hidden');
+    if (tableView) tableView.classList.remove('hidden');
+    if (cardBtn) cardBtn.classList.remove('active');
+    if (tableBtn) tableBtn.classList.add('active');
+    renderTableView();
+  } else {
+    if (cardView) cardView.classList.remove('hidden');
+    if (tableView) tableView.classList.add('hidden');
+    if (cardBtn) cardBtn.classList.add('active');
+    if (tableBtn) tableBtn.classList.remove('active');
+  }
+}
+
+window.selectProjectFromTable = function (projectId) {
+  setSelected(projectId);
+  if (window.innerWidth <= 1024) toggleSidebar(false);
+};
+
 function render() {
   renderProjectList();
   renderProjectDetail();
   renderProjectDetailMore();
+  updateDashboardStats();
+  if (currentView === 'table') {
+    renderTableView();
+  }
   const selectedProject = getSelectedProject();
   if (selectedProject) {
     renderTimeline(selectedProject);
@@ -1585,6 +1681,12 @@ function bindEvents() {
       createFromClipboard();
     }
   });
+
+  // View toggle (Phase 2)
+  const viewCardBtn = document.getElementById('viewCardBtn');
+  const viewTableBtn = document.getElementById('viewTableBtn');
+  if (viewCardBtn) viewCardBtn.addEventListener('click', () => switchView('card'));
+  if (viewTableBtn) viewTableBtn.addEventListener('click', () => switchView('table'));
 }
 
 function updateEntraButtonsVisibility() {
@@ -1605,6 +1707,291 @@ async function init() {
   }
   render();
   bindEvents();
+
+  // Auto-load from OneDrive on startup (Ippo Dashboard pattern)
+  if (entraSettings.autoSync && entraSettings.clientId && navigator.onLine) {
+    addLog("起動時自動同期: OneDriveからデータを読み込み中...", "info");
+    try {
+      await loadFromOneDrive();
+    } catch (err) {
+      console.warn("Auto-load from OneDrive failed:", err);
+    }
+  }
+
+  updateSyncIndicator();
 }
+
+// ==========================================
+// AI Coach (Manual AI Bridge)
+// ==========================================
+
+/**
+ * Generate an AI coaching prompt for the selected project
+ * Uses clipboard-based "Manual AI Bridge" pattern from SEED v5
+ */
+function generateAiCoachPrompt(project) {
+  if (!project) return null;
+
+  const pendingActions = project.nextActions
+    .filter(a => !a.done)
+    .map(a => `- ${a.text}`)
+    .join('\n');
+
+  const completedActions = project.nextActions
+    .filter(a => a.done)
+    .map(a => `- ${a.text}`)
+    .join('\n');
+
+  const prompt = `
+## 相談: ${project.title}
+
+### 現在の状況
+- **ステータス**: ${STATUS_LABELS[project.status] || project.status}
+- **熱量**: ${'🔥'.repeat(parseInt(project.heat || 2))}
+- **優先度**: ${PRIORITY_LABELS[project.priority] || project.priority}
+- **期限**: ${project.dueDate || '未設定'}
+
+### 概要
+${project.summary || '(未記入)'}
+
+### やりかけのこと (未完了タスク)
+${pendingActions || '(なし)'}
+
+### 完了したこと
+${completedActions || '(なし)'}
+
+### 停滞理由
+${project.stuckReason || '(なし)'}
+
+### 再開時メモ
+${project.resumeMemo || '(なし)'}
+
+---
+
+**質問**: このプロジェクトを前に進めるために、次に何をすべきですか？
+優先度を考慮して、具体的な1〜3個のアクションを提案してください。
+`.trim();
+
+  return prompt;
+}
+
+/**
+ * Copy AI coaching prompt to clipboard
+ */
+async function askAiCoach() {
+  const project = getSelectedProject();
+  if (!project) {
+    showToast('プロジェクトを選択してください');
+    return;
+  }
+
+  const prompt = generateAiCoachPrompt(project);
+  if (!prompt) return;
+
+  try {
+    await navigator.clipboard.writeText(prompt);
+    showToast('💡 AIへの相談プロンプトをコピーしました！ChatGPT等に貼り付けてください');
+    addLog(`AI相談プロンプト生成: ${project.title}`, 'success');
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    showToast('コピーに失敗しました');
+  }
+}
+
+// Expose for inline onclick or dynamic binding
+window.askAiCoach = askAiCoach;
+
+// ============================
+// Phase 5: Hobby Project Ecosystem
+// ============================
+
+/**
+ * Calculate project health score (0-100)
+ * Based on: completed actions / total actions
+ */
+function calculateHealth(project) {
+  const total = project.nextActions?.length || 0;
+  if (total === 0) return 100; // No actions = healthy
+  const done = project.nextActions.filter(a => a.done).length;
+  return Math.round((done / total) * 100);
+}
+
+/**
+ * Get all showcase (殿堂入り) projects
+ */
+function getShowcaseProjects() {
+  return state.projects.filter(p => p.status === 'showcase' && !p.archived);
+}
+
+/**
+ * Generate weekly activity summary
+ */
+function generateWeeklySummary() {
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  const recentlyUpdated = state.projects.filter(p =>
+    new Date(p.updatedAt) >= oneWeekAgo
+  );
+  const completed = recentlyUpdated.filter(p => p.status === 'done' || p.status === 'showcase');
+  const newProjects = state.projects.filter(p =>
+    new Date(p.createdAt) >= oneWeekAgo
+  );
+
+  return {
+    updated: recentlyUpdated.length,
+    completed: completed.length,
+    newProjects: newProjects.length,
+    mostActive: recentlyUpdated.sort((a, b) =>
+      (parseInt(b.heat) || 2) - (parseInt(a.heat) || 2)
+    ).slice(0, 3)
+  };
+}
+
+/**
+ * Export showcase projects as JSON for AI analysis
+ */
+function exportShowcase() {
+  const showcaseItems = getShowcaseProjects().map(p => ({
+    title: p.title,
+    summary: p.summary,
+    tags: p.tags,
+    completedActions: p.nextActions?.filter(a => a.done).map(a => a.text) || [],
+    completedAt: p.updatedAt,
+    heat: p.heat
+  }));
+
+  const stats = {
+    totalCompleted: showcaseItems.length,
+    allTags: [...new Set(showcaseItems.flatMap(p => p.tags))],
+    avgHeat: showcaseItems.length > 0
+      ? (showcaseItems.reduce((sum, p) => sum + (parseInt(p.heat) || 2), 0) / showcaseItems.length).toFixed(1)
+      : 0
+  };
+
+  return { showcaseItems, stats };
+}
+
+/**
+ * Generate AI prompt from showcase for new idea generation
+ */
+function generateIdeaPrompt() {
+  const { showcaseItems, stats } = exportShowcase();
+
+  if (showcaseItems.length === 0) {
+    return null;
+  }
+
+  const projectList = showcaseItems.map((p, i) =>
+    `### ${i + 1}. ${p.title}
+- 概要: ${p.summary || '(なし)'}
+- タグ: ${p.tags.join(', ') || '(なし)'}
+- 完了したこと: ${p.completedActions.slice(0, 5).join(', ') || '(なし)'}`
+  ).join('\n\n');
+
+  const prompt = `
+# 🎨 私の完成プロジェクト一覧（趣味）
+
+${projectList}
+
+---
+
+## 📊 統計
+- 完成プロジェクト数: ${stats.totalCompleted}
+- よく使うタグ: ${stats.allTags.join(', ')}
+- 平均熱量: ${stats.avgHeat}🔥
+
+---
+
+## 質問
+
+これらの完成プロジェクトを見て:
+
+1. **傾向分析**: 私の興味・スキルの傾向はどう見えますか？
+2. **次のアイデア**: これらを踏まえて、次に挑戦すると面白そうなプロジェクトを3つ提案してください
+3. **発展形**: 既存プロジェクトを発展・拡張するアイデアはありますか？
+
+具体的に、すぐ始められる形で提案してください！
+`.trim();
+
+  return prompt;
+}
+
+/**
+ * Copy idea generation prompt to clipboard
+ */
+async function askForNewIdeas() {
+  const prompt = generateIdeaPrompt();
+
+  if (!prompt) {
+    showToast('🏆 殿堂入りプロジェクトがありません。まずプロジェクトを完成させて殿堂入りにしましょう！');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(prompt);
+    showToast('🚀 アイデア生成プロンプトをコピーしました！AIに貼り付けて新しいプロジェクトアイデアをもらおう');
+    addLog(`アイデア生成プロンプト: ${getShowcaseProjects().length}件の殿堂入りから生成`, 'success');
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    showToast('コピーに失敗しました');
+  }
+}
+
+/**
+ * Generate reflection prompt for weekly review
+ */
+function generateReflectionPrompt() {
+  const summary = generateWeeklySummary();
+
+  const activeList = summary.mostActive.map(p =>
+    `- ${p.title} (熱量: ${'🔥'.repeat(parseInt(p.heat) || 2)})`
+  ).join('\n');
+
+  const prompt = `
+# 📅 今週の振り返り
+
+## 今週の活動
+- 更新したプロジェクト: ${summary.updated}件
+- 完成したプロジェクト: ${summary.completed}件
+- 新しく始めたプロジェクト: ${summary.newProjects}件
+
+## 最もアクティブなプロジェクト
+${activeList || '(なし)'}
+
+---
+
+## 質問
+
+1. 今週一番楽しかった作業は何でしたか？
+2. 来週の休みにやりたいことは？
+3. 停滞しているプロジェクトはどう動かす？
+
+気楽に、趣味だから楽しむことを最優先で！
+`.trim();
+
+  return prompt;
+}
+
+/**
+ * Copy weekly reflection prompt to clipboard
+ */
+async function weeklyReflection() {
+  const prompt = generateReflectionPrompt();
+
+  try {
+    await navigator.clipboard.writeText(prompt);
+    showToast('📅 週間振り返りプロンプトをコピーしました！');
+    addLog('週間振り返りプロンプト生成', 'success');
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    showToast('コピーに失敗しました');
+  }
+}
+
+// Expose Phase 5 functions
+window.askForNewIdeas = askForNewIdeas;
+window.weeklyReflection = weeklyReflection;
+window.calculateHealth = calculateHealth;
 
 init();
