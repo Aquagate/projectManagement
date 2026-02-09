@@ -1994,4 +1994,48 @@ window.askForNewIdeas = askForNewIdeas;
 window.weeklyReflection = weeklyReflection;
 window.calculateHealth = calculateHealth;
 
+// ============================
+// OneDrive Settings Save
+// ============================
+function saveOneDriveSettings() {
+  const settings = {
+    clientId: ui.entraClientIdInput?.value || '',
+    tenantId: ui.entraTenantIdInput?.value || 'common',
+    drivePath: ui.entraDrivePathInput?.value || 'ProjectHub/projects.json',
+    redirectUri: ui.entraRedirectUriInput?.value || window.location.origin + window.location.pathname,
+    useAppFolder: ui.entraAppFolderToggle?.checked || false,
+    autoSync: ui.entraAutoSyncToggle?.checked || true
+  };
+
+  localStorage.setItem('pjhub_onedrive_settings', JSON.stringify(settings));
+  showToast('✅ OneDrive設定を保存しました');
+  addLog('設定保存: OneDrive同期設定', 'success');
+}
+
+function loadOneDriveSettings() {
+  const saved = localStorage.getItem('pjhub_onedrive_settings');
+  if (!saved) return;
+
+  try {
+    const settings = JSON.parse(saved);
+    if (ui.entraClientIdInput) ui.entraClientIdInput.value = settings.clientId || '';
+    if (ui.entraTenantIdInput) ui.entraTenantIdInput.value = settings.tenantId || 'common';
+    if (ui.entraDrivePathInput) ui.entraDrivePathInput.value = settings.drivePath || '';
+    if (ui.entraRedirectUriInput) ui.entraRedirectUriInput.value = settings.redirectUri || '';
+    if (ui.entraAppFolderToggle) ui.entraAppFolderToggle.checked = settings.useAppFolder || false;
+    if (ui.entraAutoSyncToggle) ui.entraAutoSyncToggle.checked = settings.autoSync !== false;
+  } catch (e) {
+    console.error('Failed to load OneDrive settings:', e);
+  }
+}
+
+// Bind save settings button
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+if (saveSettingsBtn) {
+  saveSettingsBtn.addEventListener('click', saveOneDriveSettings);
+}
+
+// Load settings on page load
+document.addEventListener('DOMContentLoaded', loadOneDriveSettings);
+
 init();
