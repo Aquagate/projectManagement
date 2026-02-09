@@ -227,14 +227,23 @@ function updateSyncIndicator() {
   };
 
   const config = statusConfig[syncStatus] || statusConfig.idle;
-  const lastSyncStr = lastSyncTime ? `最終: ${lastSyncTime.toLocaleTimeString()}` : '';
+
+  // Format time as HH:mm:ss explicitly
+  let timeStr = '';
+  if (lastSyncTime) {
+    const hours = lastSyncTime.getHours().toString().padStart(2, '0');
+    const minutes = lastSyncTime.getMinutes().toString().padStart(2, '0');
+    const seconds = lastSyncTime.getSeconds().toString().padStart(2, '0');
+    timeStr = `${hours}:${minutes}:${seconds}`;
+  }
+
+  const lastSyncStr = timeStr ? `(${timeStr})` : '';
   const offlineBadge = !navigator.onLine ? '<span class="offline-badge">オフライン</span>' : '';
 
   indicator.className = `sync-indicator ${config.class}`;
   indicator.innerHTML = `
     <span class="sync-icon">${config.icon}</span>
-    <span class="sync-text">${config.text}</span>
-    ${lastSyncStr ? `<span class="sync-time">${lastSyncStr}</span>` : ''}
+    <span class="sync-text">${config.text} ${lastSyncStr}</span>
     ${offlineBadge}
   `;
 }
