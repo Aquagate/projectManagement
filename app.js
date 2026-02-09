@@ -1995,38 +1995,40 @@ window.weeklyReflection = weeklyReflection;
 window.calculateHealth = calculateHealth;
 
 // ============================
-// OneDrive Settings Save
+// OneDrive Settings Save (Corrected)
 // ============================
 function saveOneDriveSettings() {
-  const settings = {
-    clientId: ui.entraClientIdInput?.value || '',
-    tenantId: ui.entraTenantIdInput?.value || 'common',
-    drivePath: ui.entraDrivePathInput?.value || 'ProjectHub/projects.json',
-    redirectUri: ui.entraRedirectUriInput?.value || window.location.origin + window.location.pathname,
-    useAppFolder: ui.entraAppFolderToggle?.checked || false,
-    autoSync: ui.entraAutoSyncToggle?.checked || true
-  };
+  // Update global state
+  entraSettings.clientId = ui.entraClientIdInput?.value || '';
+  entraSettings.tenantId = ui.entraTenantIdInput?.value || 'common';
+  entraSettings.drivePath = ui.entraDrivePathInput?.value || 'ProjectHub/projects.json';
+  entraSettings.redirectUri = ui.entraRedirectUriInput?.value || window.location.origin + window.location.pathname;
+  entraSettings.useAppFolder = ui.entraAppFolderToggle?.checked || false;
+  entraSettings.autoSync = ui.entraAutoSyncToggle?.checked || false; // Default to false if unchecked
 
-  localStorage.setItem('pjhub_onedrive_settings', JSON.stringify(settings));
+  // Persist to correct key
+  persistEntraSettings();
+
   showToast('✅ OneDrive設定を保存しました');
   addLog('設定保存: OneDrive同期設定', 'success');
+
+  // Update UI visibility based on new settings
+  updateEntraButtonsVisibility();
 }
 
-function loadOneDriveSettings() {
-  const saved = localStorage.getItem('pjhub_onedrive_settings');
-  if (!saved) return;
+// Function to load settings into UI (using existing loadEntraSettings logic)
+function syncUiWithEntraSettings() {
+  // Ensure settings are loaded from storage first
+  loadEntraSettings();
 
-  try {
-    const settings = JSON.parse(saved);
-    if (ui.entraClientIdInput) ui.entraClientIdInput.value = settings.clientId || '';
-    if (ui.entraTenantIdInput) ui.entraTenantIdInput.value = settings.tenantId || 'common';
-    if (ui.entraDrivePathInput) ui.entraDrivePathInput.value = settings.drivePath || '';
-    if (ui.entraRedirectUriInput) ui.entraRedirectUriInput.value = settings.redirectUri || '';
-    if (ui.entraAppFolderToggle) ui.entraAppFolderToggle.checked = settings.useAppFolder || false;
-    if (ui.entraAutoSyncToggle) ui.entraAutoSyncToggle.checked = settings.autoSync !== false;
-  } catch (e) {
-    console.error('Failed to load OneDrive settings:', e);
-  }
+  if (ui.entraClientIdInput) ui.entraClientIdInput.value = entraSettings.clientId || '';
+  if (ui.entraTenantIdInput) ui.entraTenantIdInput.value = entraSettings.tenantId || 'common';
+  if (ui.entraDrivePathInput) ui.entraDrivePathInput.value = entraSettings.drivePath || '';
+  if (ui.entraRedirectUriInput) ui.entraRedirectUriInput.value = entraSettings.redirectUri || '';
+  if (ui.entraAppFolderToggle) ui.entraAppFolderToggle.checked = entraSettings.useAppFolder || false;
+  if (ui.entraAutoSyncToggle) ui.entraAutoSyncToggle.checked = entraSettings.autoSync || false;
+
+  updateEntraButtonsVisibility();
 }
 
 // Bind save settings button
@@ -2043,7 +2045,7 @@ if (entraConnectBtn) {
 
 // Check for existing MSAL session and update UI
 async function checkExistingSession() {
-  loadOneDriveSettings();
+  syncUiWithEntraSettings();
 
   // Only check if settings are configured
   if (!entraSettings.clientId) return;
@@ -2062,6 +2064,11 @@ async function checkExistingSession() {
         ui.entraStatus.classList.add('connected');
       }
       addLog(`セッション復元: ${account.username}`, 'success');
+
+      // Auto-load if enabled
+      if (entraSettings.autoSync && navigator.onLine) {
+        loadFromOneDrive();
+      }
     }
   } catch (e) {
     console.log('No existing session:', e);
