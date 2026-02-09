@@ -1,4 +1,4 @@
-const CACHE_NAME = "project-hub-v1";
+const CACHE_NAME = "project-hub-v3";
 const ASSETS = [
     "./",
     "./index.html",
@@ -33,7 +33,8 @@ self.addEventListener("activate", (event) => {
     self.clients.claim();
 });
 
-// Fetch event - cache-first strategy for static assets
+// Fetch event - NETWORK-FIRST strategy for HTML/JS/CSS
+// Ensures latest version is always fetched when online
 self.addEventListener("fetch", (event) => {
     // Skip non-GET requests
     if (event.request.method !== "GET") return;
@@ -42,14 +43,38 @@ self.addEventListener("fetch", (event) => {
     const url = new URL(event.request.url);
     if (url.origin !== location.origin) return;
 
+    // Network-first for core assets (html, js, css)
+    if (url.pathname.match(/\.(html|css|js)$/) || url.pathname === "/" || url.pathname.endsWith("/")) {
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    // Update cache with fresh response
+                    if (networkResponse.ok) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => {
+                    // Fallback to cache when offline
+                    return caches.match(event.request).then((cached) => {
+                        return cached || caches.match("./index.html");
+                    });
+                })
+        );
+        return;
+    }
+
+    // Cache-first for static assets (images, icons)
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
             return fetch(event.request).then((networkResponse) => {
-                // Cache new static assets
-                if (networkResponse.ok && url.pathname.match(/\.(html|css|js|png|json)$/)) {
+                if (networkResponse.ok && url.pathname.match(/\.(png|json|ico|svg)$/)) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, responseClone);
@@ -58,7 +83,6 @@ self.addEventListener("fetch", (event) => {
                 return networkResponse;
             });
         }).catch(() => {
-            // Fallback for offline
             if (event.request.destination === "document") {
                 return caches.match("./index.html");
             }

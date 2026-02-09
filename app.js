@@ -2041,7 +2041,34 @@ if (entraConnectBtn) {
   entraConnectBtn.addEventListener('click', entraLogin);
 }
 
-// Load settings on page load
-document.addEventListener('DOMContentLoaded', loadOneDriveSettings);
+// Check for existing MSAL session and update UI
+async function checkExistingSession() {
+  loadOneDriveSettings();
+
+  // Only check if settings are configured
+  if (!entraSettings.clientId) return;
+
+  try {
+    const msalApp = await ensureMsalInstance();
+    if (!msalApp) return;
+
+    const accounts = msalApp.getAllAccounts();
+    if (accounts && accounts.length > 0) {
+      const account = accounts[0];
+      msalApp.setActiveAccount(account);
+      if (ui.entraStatus) {
+        ui.entraStatus.textContent = `接続中: ${account.username}`;
+        ui.entraStatus.classList.remove('offline');
+        ui.entraStatus.classList.add('connected');
+      }
+      addLog(`セッション復元: ${account.username}`, 'success');
+    }
+  } catch (e) {
+    console.log('No existing session:', e);
+  }
+}
+
+// Load settings and check session on page load
+document.addEventListener('DOMContentLoaded', checkExistingSession);
 
 init();
