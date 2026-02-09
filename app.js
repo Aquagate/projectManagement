@@ -472,6 +472,14 @@ function scheduleOneDriveSave() {
   }, 2000);
 }
 
+function forceSaveToOneDrive() {
+  if (window.oneDriveDebounce) {
+    window.clearTimeout(window.oneDriveDebounce);
+    window.oneDriveDebounce = null;
+  }
+  saveToOneDrive();
+}
+
 function setSelected(id) {
   state.selectedId = id;
   scheduleSave();
@@ -1604,18 +1612,24 @@ function bindEvents() {
     ui.stuckReasonInput,
   ].forEach((input) => {
     input.addEventListener("input", updateProjectFromForm);
-    input.addEventListener("change", updateProjectFromForm);
+    // Blur event triggers immediate save to OneDrive
+    input.addEventListener("blur", () => {
+      updateProjectFromForm();
+      if (entraSettings.autoSync) forceSaveToOneDrive();
+    });
   });
 
   ui.addActionBtn.addEventListener("click", () => {
     addNextAction(ui.quickActionInput.value);
     ui.quickActionInput.value = "";
+    if (entraSettings.autoSync) forceSaveToOneDrive();
   });
 
   ui.quickActionInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       addNextAction(ui.quickActionInput.value);
       ui.quickActionInput.value = "";
+      if (entraSettings.autoSync) forceSaveToOneDrive();
     }
   });
 
@@ -1626,6 +1640,7 @@ function bindEvents() {
   ui.addLinkBtn.addEventListener("click", () => {
     addLink();
     ui.linkFormContainer.style.display = "none";
+    if (entraSettings.autoSync) forceSaveToOneDrive();
   });
   ui.toggleLinkFormBtn.addEventListener("click", () => {
     const isHidden = ui.linkFormContainer.style.display === "none";
@@ -1635,7 +1650,10 @@ function bindEvents() {
 
   ui.fileInput.addEventListener("change", (event) => {
     const files = Array.from(event.target.files || []);
-    if (files.length) handleFiles(files);
+    if (files.length) {
+      handleFiles(files);
+      if (entraSettings.autoSync) forceSaveToOneDrive();
+    }
     ui.fileInput.value = "";
   });
 
@@ -1670,7 +1688,12 @@ function bindEvents() {
   const resumeMemoInput = document.getElementById("resumeMemoInput");
   const contextSnapshotInput = document.getElementById("contextSnapshotInput");
   [heatInput, resumeMemoInput, contextSnapshotInput].forEach(input => {
+    if (!input) return;
     input.addEventListener("input", updateProjectFromForm);
+    input.addEventListener("blur", () => {
+      updateProjectFromForm();
+      if (entraSettings.autoSync) forceSaveToOneDrive();
+    });
   });
 
   document.addEventListener("keydown", (event) => {
