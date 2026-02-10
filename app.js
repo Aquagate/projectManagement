@@ -1602,92 +1602,35 @@ function bindEvents() {
   ui.sortBy.addEventListener("change", renderProjectList);
   ui.sampleDataBtn.addEventListener("click", initSampleData);
 
+  // Specific listeners for select interactions (Heat, Priority, etc)
+  // 'change' event is needed for <select> to trigger immediate save
   [
-    ui.titleInput,
-    ui.summaryInput,
-    ui.tagsInput,
     ui.statusInput,
     ui.priorityInput,
-    ui.dueDateInput,
-    ui.stuckReasonInput,
-  ].forEach((input) => {
-    input.addEventListener("input", updateProjectFromForm);
-    // Blur event triggers immediate save to OneDrive
-    input.addEventListener("blur", () => {
+    document.getElementById("heatInput"),
+  ].forEach(input => {
+    if (!input) return;
+    input.addEventListener("change", () => {
       updateProjectFromForm();
       if (entraSettings.autoSync) forceSaveToOneDrive();
     });
   });
 
-  ui.addActionBtn.addEventListener("click", () => {
-    addNextAction(ui.quickActionInput.value);
-    ui.quickActionInput.value = "";
-    if (entraSettings.autoSync) forceSaveToOneDrive();
-  });
-
-  ui.quickActionInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      addNextAction(ui.quickActionInput.value);
-      ui.quickActionInput.value = "";
-      if (entraSettings.autoSync) forceSaveToOneDrive();
-    }
-  });
-
-  ui.copyIncompleteBtn.addEventListener("click", () => copyText(buildCopyText(false)));
-  ui.copyAllBtn.addEventListener("click", () => copyText(buildCopyText(true)));
-  ui.copySummaryBtn.addEventListener("click", () => copyText(buildSummaryCopy()));
-
-  ui.addLinkBtn.addEventListener("click", () => {
-    addLink();
-    ui.linkFormContainer.style.display = "none";
-    if (entraSettings.autoSync) forceSaveToOneDrive();
-  });
-  ui.toggleLinkFormBtn.addEventListener("click", () => {
-    const isHidden = ui.linkFormContainer.style.display === "none";
-    ui.linkFormContainer.style.display = isHidden ? "grid" : "none";
-    ui.toggleLinkFormBtn.textContent = isHidden ? "− 閉じる" : "+ 追加";
-  });
-
-  ui.fileInput.addEventListener("change", (event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length) {
-      handleFiles(files);
-      if (entraSettings.autoSync) forceSaveToOneDrive();
-    }
-    ui.fileInput.value = "";
-  });
-
-  ui.exportFullBtn.addEventListener("click", () => exportData(true));
-  ui.importInput.addEventListener("change", (event) => {
-    const file = event.target.files?.[0];
-    if (file) importData(file);
-    ui.importInput.value = "";
-  });
-
-  ui.syncSettingsBtn.addEventListener("click", () => {
-    document.getElementById("syncSection")?.scrollIntoView({ behavior: "smooth" });
-  });
-  ui.entraLoginBtn.addEventListener("click", entraLogin);
-  ui.entraLogoutBtn.addEventListener("click", entraLogout);
-  ui.entraConfigBtn.addEventListener("click", configureEntraSettings);
-  ui.entraRedirectUriSetBtn.addEventListener("click", () => {
-    ui.entraRedirectUriInput.value = window.location.origin;
-    configureEntraSettings();
-  });
-  ui.entraLoadBtn.addEventListener("click", loadFromOneDrive);
-  ui.entraSaveBtn.addEventListener("click", saveToOneDrive);
-  ui.entraAutoSyncToggle.addEventListener("change", () => {
-    entraSettings.autoSync = ui.entraAutoSyncToggle.checked;
-    persistEntraSettings();
-    if (entraSettings.autoSync) scheduleOneDriveSave();
-    updateEntraButtonsVisibility();
-  });
-  ui.sidebarToggle.addEventListener("click", () => toggleSidebar());
-
-  const heatInput = document.getElementById("heatInput");
+  // Text inputs - blur triggers immediate save
+  const heatInput = document.getElementById("heatInput"); // Kept for reference if it becomes input later
   const resumeMemoInput = document.getElementById("resumeMemoInput");
   const contextSnapshotInput = document.getElementById("contextSnapshotInput");
-  [heatInput, resumeMemoInput, contextSnapshotInput].forEach(input => {
+  const stuckReasonInput = document.getElementById("stuckReasonInput");
+
+  [
+    ui.titleInput,
+    ui.summaryInput,
+    ui.tagsInput,
+    ui.dueDateInput,
+    stuckReasonInput,
+    resumeMemoInput,
+    contextSnapshotInput
+  ].forEach(input => {
     if (!input) return;
     input.addEventListener("input", updateProjectFromForm);
     input.addEventListener("blur", () => {
