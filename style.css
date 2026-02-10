@@ -1472,3 +1472,73 @@ button.small,
   padding: 6px 8px;
   font-size: 0.8rem;
 }
+
+/* ========================
+   24. Header View Switcher
+   ======================== */
+.view-btn.icon-only {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: var(--border-radius-sm);
+  font-size: 1.2rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.view-btn.icon-only:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-primary);
+}
+
+.view-btn.icon-only.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+/* ========================
+   25. Table Enhancements
+   ======================== */
+.project-table input,
+.project-table select {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.project-table input:hover,
+.project-table select:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.project-table input:focus,
+.project-table select:focus {
+  background: white;
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+.title-cell span.clickable-title {
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: none;
+  display: block;
+}
+
+.title-cell span.clickable-title:hover {
+  text-decoration: underline;
+  color: var(--accent-primary);
+}

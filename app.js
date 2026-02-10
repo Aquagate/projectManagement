@@ -240,16 +240,13 @@ function updateSyncIndicator() {
   const lastSyncStr = timeStr ? `(${timeStr})` : '';
   const offlineBadge = !navigator.onLine ? '<span class="offline-badge">オフライン</span>' : '';
 
-  // Show "Ready" if idle but never synced
+  // Show "Sync Complete" even on initial load if we have a time, or just default text
   let displayText = config.text;
-  if (syncStatus === 'idle' && !lastSyncStr) {
-    displayText = '準備完了';
-  }
 
   indicator.className = `sync-indicator ${config.class}`;
   indicator.innerHTML = `
     <span class="sync-icon">${config.icon}</span>
-    <span class="sync-text">${displayText} ${lastSyncStr}</span>
+    <span class="sync-text">${displayText} <span class="sync-time">${lastSyncStr}</span></span>
     ${offlineBadge}
   `;
 }
@@ -592,12 +589,22 @@ function updateProjectFromForm() {
   // Track status change
   if (updates.status && updates.status !== project.status) {
     addTimelineEntry(project, "status_changed", `${STATUS_LABELS[project.status]} → ${STATUS_LABELS[updates.status]}`);
-    // Auto-archive when status changes to "done"
-    if (updates.status === "done" && !project.archived) {
-      updates.archived = true;
-      updates.archivedAt = nowIso();
-      addTimelineEntry(project, "archived", "完了により自動アーカイブ");
-      showToast("完了したプロジェクトをアーカイブに移動しました");
+
+    // Auto-archive logic: Done -> Archive, Other -> Unarchive
+    if (updates.status === "done") {
+      if (!project.archived) {
+        updates.archived = true;
+        updates.archivedAt = nowIso();
+        addTimelineEntry(project, "archived", "完了により自動アーカイブ");
+        showToast("完了したプロジェクトをアーカイブに移動しました");
+      }
+    } else {
+      // If moving FROM done to something else, unarchive
+      if (project.archived) {
+        updates.archived = false;
+        updates.archivedAt = null;
+        addTimelineEntry(project, "unarchived", "ステータス変更によりアーカイブ解除");
+      }
     }
   }
   // Track manual archive/unarchive
@@ -1487,24 +1494,78 @@ function renderTableView() {
   });
   const sorted = sortProjects(filtered, sortBy);
 
+  // Render table with inline editing helpers
   tableBody.innerHTML = sorted.map(project => {
     const pendingActions = project.nextActions.filter(a => !a.done).length;
-    const heat = '🔥'.repeat(parseInt(project.heat || 2));
     const isSelected = project.id === state.selectedId;
 
+    // Helper to generate select options
+    const createOptions = (obj, current) => Object.entries(obj).map(([key, label]) =>
+      `<option value="${key}" ${key === current ? 'selected' : ''}>${label}</option>`
+    ).join('');
+
+    // Specialized heat options
+    const heatOptions = [1, 2, 3].map(v =>
+      `<option value="${v}" ${String(project.heat) === String(v) ? 'selected' : ''}>${'🔥'.repeat(v)}</option>`
+    ).join('');
+
     return `
-      <tr data-id="${project.id}" class="${isSelected ? 'selected' : ''}" onclick="window.selectProjectFromTable('${project.id}')">
-        <td class="title-cell">${project.title}</td>
-        <td><span class="status-pill status-${project.status}">${STATUS_LABELS[project.status]}</span></td>
-        <td>${PRIORITY_LABELS[project.priority]}</td>
-        <td class="heat-cell">${heat}</td>
-        <td>${project.dueDate || '-'}</td>
+      <tr data-id="${project.id}" class="${isSelected ? 'selected' : ''}">
+        <td class="title-cell">
+          <span class="clickable-title" onclick="window.selectProjectFromTable('${project.id}')">${project.title}</span>
+        </td>
+        <td>
+          <select onchange="window.updateProjectInline('${project.id}', 'status', this.value)">
+            ${createOptions(STATUS_LABELS, project.status)}
+          </select>
+        </td>
+        <td>
+          <select onchange="window.updateProjectInline('${project.id}', 'priority', this.value)">
+            ${createOptions(PRIORITY_LABELS, project.priority)}
+          </select>
+        </td>
+        <td class="heat-cell">
+          <select onchange="window.updateProjectInline('${project.id}', 'heat', this.value)">
+            ${heatOptions}
+          </select>
+        </td>
+        <td>
+          <input type="date" value="${project.dueDate || ''}" onchange="window.updateProjectInline('${project.id}', 'dueDate', this.value)" />
+        </td>
         <td>${pendingActions}</td>
         <td class="date-cell">${formatDate(project.updatedAt)}</td>
       </tr>
     `;
   }).join('');
 }
+
+window.updateProjectInline = function (id, field, value) {
+  const project = state.projects.find(p => p.id === id);
+  if (!project) return;
+
+  const updates = {};
+  updates[field] = value;
+
+  // Reuse existing logic (including timeline/archive checks)
+  if (field === 'status') {
+    // We need to simulate the "updateProjectFromForm" logic but specifically for this field
+    if (value !== project.status) {
+      addTimelineEntry(project, "status_changed", `${STATUS_LABELS[project.status]} → ${STATUS_LABELS[value]}`);
+      if (value === "done" && !project.archived) {
+        updates.archived = true;
+        updates.archivedAt = nowIso();
+        addTimelineEntry(project, "archived", "完了により自動アーカイブ");
+        showToast("完了したプロジェクトをアーカイブに移動しました");
+      } else if (value !== "done" && project.archived) {
+        updates.archived = false;
+        updates.archivedAt = null;
+        addTimelineEntry(project, "unarchived", "ステータス変更によりアーカイブ解除");
+      }
+    }
+  }
+
+  updateProject(project, updates);
+};
 
 function switchView(view) {
   currentView = view;
@@ -1529,6 +1590,7 @@ function switchView(view) {
 
 window.selectProjectFromTable = function (projectId) {
   setSelected(projectId);
+  switchView('card'); // Switch to card view
   if (window.innerWidth <= 1024) toggleSidebar(false);
 };
 
