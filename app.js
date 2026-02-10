@@ -230,7 +230,7 @@ function updateSyncIndicator() {
 
   // Format time as HH:mm:ss explicitly
   let timeStr = '';
-  if (lastSyncTime) {
+  if (lastSyncTime && lastSyncTime instanceof Date && !isNaN(lastSyncTime)) {
     const hours = lastSyncTime.getHours().toString().padStart(2, '0');
     const minutes = lastSyncTime.getMinutes().toString().padStart(2, '0');
     const seconds = lastSyncTime.getSeconds().toString().padStart(2, '0');
@@ -240,10 +240,16 @@ function updateSyncIndicator() {
   const lastSyncStr = timeStr ? `(${timeStr})` : '';
   const offlineBadge = !navigator.onLine ? '<span class="offline-badge">オフライン</span>' : '';
 
+  // Show "Ready" if idle but never synced
+  let displayText = config.text;
+  if (syncStatus === 'idle' && !lastSyncStr) {
+    displayText = '準備完了';
+  }
+
   indicator.className = `sync-indicator ${config.class}`;
   indicator.innerHTML = `
     <span class="sync-icon">${config.icon}</span>
-    <span class="sync-text">${config.text} ${lastSyncStr}</span>
+    <span class="sync-text">${displayText} ${lastSyncStr}</span>
     ${offlineBadge}
   `;
 }
