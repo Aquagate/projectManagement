@@ -307,7 +307,10 @@ function showSyncNotification() {
 
   document.getElementById('syncLoadBtn').addEventListener('click', async () => {
     bar.style.display = 'none';
-    await loadFromOneDrive(true);
+    document.getElementById('syncLoadBtn').addEventListener('click', async () => {
+      bar.style.display = 'none';
+      await loadFromOneDrive({ force: true, interactive: true });
+    });
   });
 
   document.getElementById('syncDismissBtn').addEventListener('click', () => {
@@ -1294,16 +1297,24 @@ async function entraLogout() {
   addLog("サインアウトしました", "info");
 }
 
-async function getGraphToken() {
+async function getGraphToken(interactive = true) {
   if (!promptEntraSettings()) return null;
   const msalApp = await ensureMsalInstance();
   if (!msalApp) return null;
+
   const account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
   if (!account) {
-    await entraLogin();
+    if (interactive) {
+      await entraLogin();
+    } else {
+      console.warn("Silent auth: No active account.");
+      return null;
+    }
   }
+
   const activeAccount = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
   if (!activeAccount) return null;
+
   msalApp.setActiveAccount(activeAccount);
   try {
     const response = await msalApp.acquireTokenSilent({
@@ -1312,18 +1323,29 @@ async function getGraphToken() {
     });
     return response.accessToken;
   } catch (error) {
-    console.error(error);
-    const response = await msalApp.acquireTokenPopup({
-      account: activeAccount,
-      scopes: ["User.Read", "Files.ReadWrite"],
-    });
-    return response.accessToken;
+    console.error("Silent token acquisition failed:", error);
+    if (interactive) {
+      try {
+        const response = await msalApp.acquireTokenPopup({
+          account: activeAccount,
+          scopes: ["User.Read", "Files.ReadWrite"],
+        });
+        return response.accessToken;
+      } catch (popupError) {
+        console.error("Interactive token acquisition failed:", popupError);
+        return null; // Return null on interactive failure too
+      }
+    }
+    return null; // Return null on silent failure if not interactive
   }
 }
 
-async function graphRequest(url, options = {}) {
-  const token = await getGraphToken();
-  if (!token) return null;
+async function graphRequest(url, options = {}, interactive = true) {
+  const token = await getGraphToken(interactive);
+  if (!token) {
+    if (!interactive) console.warn("Silent graph request skipped due to missing token.");
+    return null;
+  }
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -1378,14 +1400,22 @@ function mergeProjects(local, remote) {
   return Array.from(map.values());
 }
 
-async function loadFromOneDrive(force = false) {
+async function loadFromOneDrive(options = { force: false, interactive: true }) {
+  const { force, interactive } = options;
+  // Handle legacy call signature allow boolean as first arg
+  const isForce = typeof options === 'boolean' ? options : force;
+  const isInteractive = typeof options === 'object' ? (interactive ?? true) : true;
+
   syncStatus = 'syncing';
   updateSyncIndicator();
   try {
-    const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath));
+    const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath), {}, isInteractive);
     if (!response) {
       syncStatus = 'idle';
       updateSyncIndicator();
+      if (!isInteractive) {
+        addLog("自動同期スキップ: 認証が必要です", "info");
+      }
       return;
     }
     const blob = await response.blob();
@@ -1433,7 +1463,7 @@ async function loadFromOneDrive(force = false) {
   }
 }
 
-async function saveToOneDrive() {
+async function saveToOneDrive(interactive = false) {
   syncStatus = 'syncing';
   updateSyncIndicator();
   try {
@@ -1443,7 +1473,7 @@ async function saveToOneDrive() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, null, 2),
-    });
+    }, interactive);
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveへ保存しました。";
     addLog("OneDrive 保存成功", "success");
     lastSyncTime = new Date();
@@ -1858,13 +1888,20 @@ async function init() {
   if (entraSettings.autoSync && entraSettings.clientId && navigator.onLine) {
     addLog("起動時自動同期: OneDriveからデータを読み込み中...", "info");
     try {
-      await loadFromOneDrive();
-    } catch (err) {
-      console.warn("Auto-load from OneDrive failed:", err);
+      addLog("起動時自動同期: OneDriveからデータを読み込み中...", "info");
+      try {
+        // Interactive false to prevent popup blockers
+        await loadFromOneDrive({ force: false, interactive: false });
+      } catch (err) {
+        console.warn("Auto-load from OneDrive failed:", err);
+      }
     }
+    } catch (err) {
+    console.warn("Auto-load from OneDrive failed:", err);
   }
+}
 
-  updateSyncIndicator();
+updateSyncIndicator();
 }
 
 // ==========================================
