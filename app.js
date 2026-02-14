@@ -1271,7 +1271,7 @@ async function entraLogin() {
   if (!msalApp) return;
   try {
     const result = await msalApp.loginPopup({
-      scopes: ["User.Read", "Files.ReadWrite"],
+      scopes: ["User.Read", "Files.ReadWrite", "offline_access"],
     });
     msalApp.setActiveAccount(result.account);
     if (ui.entraStatus) ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
@@ -1319,7 +1319,7 @@ async function getGraphToken(interactive = true) {
   try {
     const response = await msalApp.acquireTokenSilent({
       account: activeAccount,
-      scopes: ["User.Read", "Files.ReadWrite"],
+      scopes: ["User.Read", "Files.ReadWrite", "offline_access"],
     });
     return response.accessToken;
   } catch (error) {
