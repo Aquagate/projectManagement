@@ -467,7 +467,11 @@ function scheduleSave() {
     persistState();
     syncStatus = 'idle';
     updateSyncIndicator();
-    if (entraSettings.autoSync) scheduleOneDriveSave();
+    if (entraSettings.autoSync) {
+      scheduleOneDriveSave();
+    } else {
+      console.log("Auto-sync skipped (disabled)");
+    }
   }, 400);
 }
 
@@ -1883,6 +1887,19 @@ function bindEvents() {
   }
   if (ui.entraLogoutBtn) ui.entraLogoutBtn.addEventListener('click', entraLogout);
   if (ui.entraLoginBtn) ui.entraLoginBtn.addEventListener('click', entraLogin);
+  if (ui.entraAutoSyncToggle) {
+    ui.entraAutoSyncToggle.addEventListener("change", () => {
+      entraSettings.autoSync = ui.entraAutoSyncToggle.checked;
+      updateEntraButtonsVisibility();
+      persistEntraSettings();
+      if (entraSettings.autoSync) {
+        showToast("自動同期を有効にしました");
+        forceSaveToOneDrive();
+      } else {
+        showToast("自動同期を無効にしました");
+      }
+    });
+  }
 
   // File Input
   if (ui.fileInput) {
