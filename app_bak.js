@@ -307,7 +307,7 @@ function showSyncNotification() {
 
   document.getElementById('syncLoadBtn').addEventListener('click', async () => {
     bar.style.display = 'none';
-    await loadFromOneDrive(true);
+    await loadFromOneDrive();
   });
 
   document.getElementById('syncDismissBtn').addEventListener('click', () => {
@@ -1354,7 +1354,7 @@ function buildGraphFileUrl(path) {
   return `https://graph.microsoft.com/v1.0/me/drive/root:/${safePath}:/content`;
 }
 
-async function loadFromOneDrive(force = false) {
+async function loadFromOneDrive() {
   syncStatus = 'syncing';
   updateSyncIndicator();
   try {
@@ -1365,46 +1365,7 @@ async function loadFromOneDrive(force = false) {
       return;
     }
     const blob = await response.blob();
-    const text = await blob.text();
-    const payload = JSON.parse(text);
-
-    // Initial load check: if local data is newer, skip import and upload instead
-    if (!force) {
-      const remoteLatest = payload.projects?.reduce((latest, p) => {
-        const pDate = new Date(p.updatedAt);
-        return pDate > latest ? pDate : latest;
-      }, new Date(0)) || new Date(0);
-
-      const localLatest = state.projects.reduce((latest, p) => {
-        const pDate = new Date(p.updatedAt);
-        return pDate > latest ? pDate : latest;
-      }, new Date(0));
-
-      // If local is newer or same (within 1 second margin), prefer local
-      // We use 1s margin because ISO strings might lose some precision or clock diffs
-      if (localLatest >= remoteLatest) {
-        console.log("Local data is newer or equal. Skipping download and scheduling upload.");
-        addLog("ローカルデータが最新です。OneDriveを更新します...", "info");
-
-        // Schedule upload to sync the other way
-        await saveToOneDrive();
-        return;
-      }
-    }
-
-    // Proceed with import
-    state.projects = (payload.projects || []).map(normalizeProject);
-    state.selectedId = payload.selectedId || state.projects[0]?.id || null;
-    if (payload.attachmentData) {
-      for (const entry of payload.attachmentData) {
-        if (!entry.dataUrl) continue;
-        const blob = await (await fetch(entry.dataUrl)).blob();
-        await putAttachmentBlob(entry.id, blob);
-      }
-    }
-    scheduleSave();
-    render();
-
+    await importData(blob);
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveから読み込みました。";
     addLog("OneDrive 読み込み成功", "success");
     lastSyncTime = new Date();
