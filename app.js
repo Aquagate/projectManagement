@@ -1354,6 +1354,30 @@ function buildGraphFileUrl(path) {
   return `https://graph.microsoft.com/v1.0/me/drive/root:/${safePath}:/content`;
 }
 
+function mergeProjects(local, remote) {
+  const map = new Map();
+  const getTime = (p) => new Date(p.updatedAt || 0).getTime();
+
+  // Add all local
+  local.forEach(p => map.set(p.id, p));
+
+  // Merge remote
+  remote.forEach(r => {
+    const l = map.get(r.id);
+    if (!l) {
+      map.set(r.id, r);
+    } else {
+      // Conflict: Compare timestamps
+      if (getTime(r) > getTime(l)) {
+        map.set(r.id, r); // Remote is newer
+      }
+      // Else keep local (Local is newer or equal)
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 async function loadFromOneDrive(force = false) {
   syncStatus = 'syncing';
   updateSyncIndicator();
@@ -1368,32 +1392,13 @@ async function loadFromOneDrive(force = false) {
     const text = await blob.text();
     const payload = JSON.parse(text);
 
-    // Initial load check: if local data is newer, skip import and upload instead
-    if (!force) {
-      const remoteLatest = payload.projects?.reduce((latest, p) => {
-        const pDate = new Date(p.updatedAt);
-        return pDate > latest ? pDate : latest;
-      }, new Date(0)) || new Date(0);
+    const remoteProjects = (payload.projects || []).map(normalizeProject);
+    const localProjects = state.projects;
 
-      const localLatest = state.projects.reduce((latest, p) => {
-        const pDate = new Date(p.updatedAt);
-        return pDate > latest ? pDate : latest;
-      }, new Date(0));
+    // Merge Strategy: Union of projects, newest timestamp wins per ID
+    const mergedProjects = mergeProjects(localProjects, remoteProjects);
 
-      // If local is newer or same (within 1 second margin), prefer local
-      // We use 1s margin because ISO strings might lose some precision or clock diffs
-      if (localLatest >= remoteLatest) {
-        console.log("Local data is newer or equal. Skipping download and scheduling upload.");
-        addLog("ローカルデータが最新です。OneDriveを更新します...", "info");
-
-        // Schedule upload to sync the other way
-        await saveToOneDrive();
-        return;
-      }
-    }
-
-    // Proceed with import
-    state.projects = (payload.projects || []).map(normalizeProject);
+    state.projects = mergedProjects;
     state.selectedId = payload.selectedId || state.projects[0]?.id || null;
     if (payload.attachmentData) {
       for (const entry of payload.attachmentData) {
@@ -1749,6 +1754,21 @@ function bindEvents() {
       updateProjectFromForm();
       if (entraSettings.autoSync) forceSaveToOneDrive();
     });
+  });
+
+  // Next Action Quick Add
+  const addNextActionHandler = () => {
+    const text = ui.quickActionInput.value;
+    if (text) {
+      addNextAction(text);
+      ui.quickActionInput.value = "";
+    }
+  };
+  ui.addActionBtn.addEventListener("click", addNextActionHandler);
+  ui.quickActionInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) {
+      addNextActionHandler();
+    }
   });
 
   document.addEventListener("keydown", (event) => {
