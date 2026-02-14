@@ -1894,8 +1894,7 @@ async function init() {
       console.warn("Auto-load from OneDrive failed:", err);
     }
   }
-}
-updateSyncIndicator();
+  updateSyncIndicator();
 }
 
 // ==========================================
