@@ -1664,6 +1664,11 @@ async function createFromClipboard() {
 
 function bindEvents() {
   ui.newProjectBtn.addEventListener("click", createProject);
+  // Hamburger menu toggle
+  if (ui.sidebarToggle) {
+    ui.sidebarToggle.addEventListener("click", () => toggleSidebar());
+  }
+
   ui.deleteProjectBtn.addEventListener("click", deleteProject);
   ui.globalSearch.addEventListener("input", renderProjectList);
   ui.statusFilter.addEventListener("change", renderProjectList);
