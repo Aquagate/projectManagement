@@ -1472,13 +1472,21 @@ async function saveToOneDrive(interactive = false) {
   try {
     addLog("OneDrive 保存開始 (添付込)...", "info");
     const payload = await buildExportPayload(true); // Always include attachments
-    await graphRequest(buildGraphFileUrl(entraSettings.drivePath), {
+    const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, null, 2),
     }, interactive);
+
+    let savedUrl = "";
+    try {
+      const data = await response.json();
+      savedUrl = data.webUrl || "";
+    } catch (e) { console.warn("Could not parse save response", e); }
+
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveへ保存しました。";
-    addLog("OneDrive 保存成功", "success");
+    addLog(`OneDrive 保存成功${savedUrl ? `: ${savedUrl}` : ""}`, "success");
+    if (savedUrl) addLog(`保存先URL: ${savedUrl}`, "info");
     lastSyncTime = new Date();
     syncStatus = 'idle';
     updateSyncIndicator();
