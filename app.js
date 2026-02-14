@@ -1888,16 +1888,11 @@ async function init() {
   if (entraSettings.autoSync && entraSettings.clientId && navigator.onLine) {
     addLog("起動時自動同期: OneDriveからデータを読み込み中...", "info");
     try {
-      addLog("起動時自動同期: OneDriveからデータを読み込み中...", "info");
-      try {
-        // Interactive false to prevent popup blockers
-        await loadFromOneDrive({ force: false, interactive: false });
-      } catch (err) {
-        console.warn("Auto-load from OneDrive failed:", err);
-      }
-    }
+      // Interactive false to prevent popup blockers
+      await loadFromOneDrive({ force: false, interactive: false });
     } catch (err) {
-    console.warn("Auto-load from OneDrive failed:", err);
+      console.warn("Auto-load from OneDrive failed:", err);
+    }
   }
 }
 
