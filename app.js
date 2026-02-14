@@ -1765,8 +1765,14 @@ function bindEvents() {
     }
   };
   ui.addActionBtn.addEventListener("click", addNextActionHandler);
+  ui.addActionBtn.addEventListener("touchend", (e) => {
+    e.preventDefault(); // Prevent double-firing with click
+    addNextActionHandler();
+  });
+
   ui.quickActionInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault(); // Stop form submission if any
       addNextActionHandler();
     }
   });
@@ -1789,11 +1795,44 @@ function bindEvents() {
     }
   });
 
-  // View toggle (Phase 2)
-  const viewCardBtn = document.getElementById('viewCardBtn');
-  const viewTableBtn = document.getElementById('viewTableBtn');
   if (viewCardBtn) viewCardBtn.addEventListener('click', () => switchView('card'));
   if (viewTableBtn) viewTableBtn.addEventListener('click', () => switchView('table'));
+
+  // Missing Listeners Fix
+  if (ui.exportFullBtn) ui.exportFullBtn.addEventListener('click', () => exportData(true));
+  if (ui.importInput) ui.importInput.addEventListener('change', (e) => {
+    if (e.target.files.length) importData(e.target.files[0]);
+    e.target.value = ''; // Reset
+  });
+  if (ui.syncSettingsBtn) ui.syncSettingsBtn.addEventListener('click', () => {
+    document.getElementById('syncSection')?.scrollIntoView({ behavior: 'smooth' });
+    // Open details if closed
+    const details = document.querySelector('.sync-advanced');
+    if (details) details.open = true;
+  });
+
+  if (ui.entraRedirectUriSetBtn) {
+    ui.entraRedirectUriSetBtn.addEventListener('click', () => {
+      ui.entraRedirectUriInput.value = window.location.href;
+    });
+  }
+  if (ui.entraLogoutBtn) ui.entraLogoutBtn.addEventListener('click', entraLogout);
+
+  // File Input
+  if (ui.fileInput) {
+    ui.fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleFiles(e.target.files);
+      e.target.value = '';
+    });
+  }
+
+  // Links
+  if (ui.toggleLinkFormBtn) {
+    ui.toggleLinkFormBtn.addEventListener('click', () => {
+      ui.linkFormContainer.style.display = ui.linkFormContainer.style.display === 'none' ? 'flex' : 'none';
+    });
+  }
+  if (ui.addLinkBtn) ui.addLinkBtn.addEventListener('click', addLink);
 }
 
 function updateEntraButtonsVisibility() {
