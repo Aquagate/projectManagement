@@ -1408,6 +1408,15 @@ async function loadFromOneDrive(options = { force: false, interactive: true }) {
 
   syncStatus = 'syncing';
   updateSyncIndicator();
+
+  const targetPath = entraSettings.drivePath;
+  const isAppFolder = entraSettings.useAppFolder;
+  if (!isInteractive) {
+    addLog(`自動同期試行: ${targetPath} (AppFolder: ${isAppFolder})`, "info");
+  } else {
+    addLog(`OneDrive 接続開始: ${targetPath} (AppFolder: ${isAppFolder})`, "info");
+  }
+
   try {
     const response = await graphRequest(buildGraphFileUrl(entraSettings.drivePath), {}, isInteractive);
     if (!response) {
