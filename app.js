@@ -1441,7 +1441,19 @@ async function loadFromOneDrive(options = { force: false, interactive: true }) {
     render();
 
     if (ui.entraStatus) ui.entraStatus.textContent = "OneDriveから読み込みました。";
-    addLog("OneDrive 読み込み成功", "success");
+
+    // Fetch metadata to get Web URL for debugging
+    let webUrl = "";
+    try {
+      const metadata = await graphRequest(buildGraphFileUrl(entraSettings.drivePath).replace(":/content", ""), {}, false);
+      if (metadata) {
+        const metaJson = await metadata.json();
+        webUrl = metaJson.webUrl;
+      }
+    } catch (e) { console.warn("Metadata fetch failed", e); }
+
+    addLog(`OneDrive 読み込み成功${webUrl ? `: ${webUrl}` : ""}`, "success");
+    if (webUrl) addLog(`参照先URL: ${webUrl}`, "info");
     lastSyncTime = new Date();
     syncStatus = 'idle';
     updateSyncIndicator();
