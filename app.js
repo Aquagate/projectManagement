@@ -1895,7 +1895,6 @@ async function init() {
     }
   }
 }
-
 updateSyncIndicator();
 }
 
@@ -2245,7 +2244,7 @@ async function checkExistingSession() {
 
       // Auto-load if enabled
       if (entraSettings.autoSync && navigator.onLine) {
-        loadFromOneDrive();
+        loadFromOneDrive({ force: false, interactive: false });
       }
     }
   } catch (e) {
