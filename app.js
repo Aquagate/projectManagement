@@ -1276,6 +1276,9 @@ async function entraLogin() {
     msalApp.setActiveAccount(result.account);
     if (ui.entraStatus) ui.entraStatus.textContent = `サインイン中: ${result.account.username}`;
     addLog(`サインイン成功: ${result.account.username}`, "success");
+
+    // Auto-load after manual login
+    await loadFromOneDrive({ force: true, interactive: true });
   } catch (error) {
     console.error(error);
     addLog(`サインイン失敗: ${error.message || error}`, "error");
@@ -1879,6 +1882,7 @@ function bindEvents() {
     });
   }
   if (ui.entraLogoutBtn) ui.entraLogoutBtn.addEventListener('click', entraLogout);
+  if (ui.entraLoginBtn) ui.entraLoginBtn.addEventListener('click', entraLogin);
 
   // File Input
   if (ui.fileInput) {
