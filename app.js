@@ -1328,7 +1328,7 @@ async function getGraphToken(interactive = true) {
       try {
         const response = await msalApp.acquireTokenPopup({
           account: activeAccount,
-          scopes: ["User.Read", "Files.ReadWrite"],
+          scopes: ["User.Read", "Files.ReadWrite", "offline_access"],
         });
         return response.accessToken;
       } catch (popupError) {
@@ -1447,7 +1447,10 @@ async function loadFromOneDrive(options = { force: false, interactive: true }) {
     updateSyncIndicator();
   } catch (error) {
     console.error(error);
-    addLog(`OneDrive 読み込み失敗: ${error.status || error.message || error}`, "error");
+    addLog(`OneDrive 読み込み失敗: ${error.status || error.message || error} (Path: ${entraSettings.drivePath})`, "error");
+    if (error.status === 404) {
+      showToast(`ファイルが見つかりません。パスを確認してください。\n設定: ${entraSettings.useAppFolder ? "AppFolder" : "Root"}\nパス: ${entraSettings.drivePath}`);
+    }
     syncStatus = 'error';
     updateSyncIndicator();
     if (error?.status === 404) {
